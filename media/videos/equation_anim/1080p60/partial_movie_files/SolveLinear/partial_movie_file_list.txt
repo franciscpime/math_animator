@@ -1,0 +1,13 @@
+# This file is used internally by FFMPEG.
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math/media/videos/equation_anim/1080p60/partial_movie_files/SolveLinear/2257293077_1379099733_223132457.mp4'
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math/media/videos/equation_anim/1080p60/partial_movie_files/SolveLinear/2135761390_3394500337_1511509465.mp4'
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math/media/videos/equation_anim/1080p60/partial_movie_files/SolveLinear/2135761390_1376777454_2873729818.mp4'
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math/media/videos/equation_anim/1080p60/partial_movie_files/SolveLinear/2135761390_3394500337_3661654479.mp4'
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math/media/videos/equation_anim/1080p60/partial_movie_files/SolveLinear/2135761390_1972785741_158459868.mp4'
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math/media/videos/equation_anim/1080p60/partial_movie_files/SolveLinear/2135761390_3394500337_1838050397.mp4'
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math/media/videos/equation_anim/1080p60/partial_movie_files/SolveLinear/2135761390_908603949_4119957847.mp4'
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math/media/videos/equation_anim/1080p60/partial_movie_files/SolveLinear/2135761390_3394500337_3864433611.mp4'
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math/media/videos/equation_anim/1080p60/partial_movie_files/SolveLinear/2135761390_2082326075_192819939.mp4'
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math/media/videos/equation_anim/1080p60/partial_movie_files/SolveLinear/2135761390_3394500337_595288140.mp4'
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math/media/videos/equation_anim/1080p60/partial_movie_files/SolveLinear/2135761390_2917190064_2706899483.mp4'
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math/media/videos/equation_anim/1080p60/partial_movie_files/SolveLinear/2135761390_2844360058_1520167250.mp4'
