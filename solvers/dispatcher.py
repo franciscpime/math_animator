@@ -1,30 +1,38 @@
-import sympy as sp
-
 from solvers.linear_solver import solve_linear
 from solvers.quadratic_solver import solve_quadratic
 from solvers.polynomial_solver import solve_polynomial
-from solvers.notable_products_solver import solve_notable_product
 
 
-x = sp.symbols("x")
+def dispatch_solver(
+    polynomial,
+    equation,
+    mmc,
+    scaled_expression,
+    is_factorized,
+    m,
+    n,
+    o,
+    p
+):
 
-
-def dispatch_solver(expr):
-
-    poly = sp.Poly(expr, x)
-
-    degree = poly.degree()
-
-    if is_notable_product(expr):
-        return solve_notable_product(expr)
+    degree = polynomial.degree()
 
     if degree == 1:
-        return solve_linear(expr)
+
+        return solve_linear(equation)
 
     if degree == 2:
-        return solve_quadratic(expr)
 
-    if degree >= 3:
-        return solve_polynomial(expr)
+        return solve_quadratic(
+            polynomial,
+            equation,
+            mmc,
+            scaled_expression,
+            is_factorized,
+            m,
+            n,
+            o,
+            p
+        )
 
-    raise ValueError("Unsupported equation")
+    return solve_polynomial(polynomial, equation)

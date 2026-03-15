@@ -1,5 +1,20 @@
-def solve_polynomial(polynomial, equation):
+import sympy as sp
+from models.step import EquationStep
 
-    raise NotImplementedError(
-        "Polynomial equations of degree greater than 2 are not supported yet."
+x = sp.symbols("x")
+
+
+def solve_polynomial(expr):
+
+    steps = []
+
+    solutions = sp.solve(expr, x)
+
+    steps.append(
+        EquationStep(
+            before=expr,
+            after=f"x={sp.latex(solutions)}"
+        )
     )
+
+    return steps

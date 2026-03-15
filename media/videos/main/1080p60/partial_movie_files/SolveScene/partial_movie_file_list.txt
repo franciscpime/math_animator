@@ -1,0 +1,12 @@
+# This file is used internally by FFMPEG.
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math_animator/media/videos/main/1080p60/partial_movie_files/SolveScene/2257293077_1746426230_223132457.mp4'
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math_animator/media/videos/main/1080p60/partial_movie_files/SolveScene/2135761390_2930053620_4123096319.mp4'
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math_animator/media/videos/main/1080p60/partial_movie_files/SolveScene/2135761390_3896891503_2821985266.mp4'
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math_animator/media/videos/main/1080p60/partial_movie_files/SolveScene/2135761390_1432596116_2601619351.mp4'
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math_animator/media/videos/main/1080p60/partial_movie_files/SolveScene/2135761390_3841665125_3626408162.mp4'
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math_animator/media/videos/main/1080p60/partial_movie_files/SolveScene/2135761390_198360053_1223848562.mp4'
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math_animator/media/videos/main/1080p60/partial_movie_files/SolveScene/2135761390_1432596116_1254450838.mp4'
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math_animator/media/videos/main/1080p60/partial_movie_files/SolveScene/2135761390_1543122353_1846966153.mp4'
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math_animator/media/videos/main/1080p60/partial_movie_files/SolveScene/2135761390_1432596116_1311017317.mp4'
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math_animator/media/videos/main/1080p60/partial_movie_files/SolveScene/2135761390_2955203204_4198110286.mp4'
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math_animator/media/videos/main/1080p60/partial_movie_files/SolveScene/2135761390_1432596116_1735557022.mp4'

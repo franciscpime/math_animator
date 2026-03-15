@@ -1,6 +1,6 @@
 import sympy as sp
 from manim import *
-from models.step import EquationStep
+from utils.latex_formatter import to_latex
 
 
 class EquationRenderer:
@@ -13,28 +13,12 @@ class EquationRenderer:
 
     def animate(self, steps):
 
-        def to_latex(expr):
-            # if already string, return
-            if isinstance(expr, str):
-                return expr
-        
-            # if sympy expression, convert to latex
-            if isinstance(expr, sp.Basic):
-                return sp.latex(expr)
-        
-            return str(expr)
-
-        # Primeira equação
         first = to_latex(steps[0].before)
 
         self.tex = MathTex(first).scale(1.4)
         self.scene.play(Write(self.tex))
 
-        for step in steps[1:]:
-
-            if self.explanation_tex:
-                self.scene.play(FadeOut(self.explanation_tex))
-                self.explanation_tex = None
+        for step in steps:
 
             after = to_latex(step.after)
 
@@ -47,7 +31,6 @@ class EquationRenderer:
 
             self.tex = new_tex
 
-            # explanation
             if step.explanation:
 
                 explanation = Tex(step.explanation).scale(0.9)

@@ -1,8 +1,9 @@
-from sympy import sp
+import sympy as sp
 from models.step import EquationStep
 
 def solve_notable_product(expr):
-
+    from solvers.dispatcher import dispatch_solver
+    
     steps = []
 
     expanded = sp.expand(expr)
@@ -14,8 +15,6 @@ def solve_notable_product(expr):
             explanation="Expand the product"
         )
     )
-
-    from solvers.dispatcher import dispatch_solver
 
     next_steps = dispatch_solver(expanded)
 
