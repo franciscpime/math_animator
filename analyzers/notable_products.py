@@ -1,26 +1,171 @@
-from sympy import Wild
+from sympy import expand, expand_mul
+from sympy.core.mul import Mul
+from sympy.core.add import Add
 
-a = Wild("a")
-b = Wild("b")
 
-PATTERNS = {
-    "square_sum": (a + b) ** 2,
-    "square_diff": (a - b) ** 2,
-    "sum_times_diff": (a + b) * (a - b),
-    "sum_times_sum": (a + b) * (a + b),
-}
-
-def detect_notable(expr):
+def notable_products(expr, steps, Step):
     """
-    Detecta casos notáveis numa expressão.
-    Retorna (tipo, match_dict)
+    Detects and handles notable products.
+    If none match, checks for a general binomial product.
     """
 
-    for name, pattern in PATTERNS.items():
+    result = square_of_sum(expr, steps, Step)
+    if result is not None:
+        return result
 
-        match = expr.match(pattern)
+    result = square_of_difference(expr, steps, Step)
+    if result is not None:
+        return result
 
-        if match:
-            return name, match
+    result = difference_of_squares(expr, steps, Step)
+    if result is not None:
+        return result
 
-    return None, None
+    result = binomial_times_binomial(expr, steps, Step)
+    if result is not None:
+        return result
+
+    return None
+
+
+# -----------------------------
+# (a+b)^2
+# -----------------------------
+
+def square_of_sum(expr, steps, Step):
+
+    if not expr.is_Pow:
+        return None
+
+    base, power = expr.args
+
+    if power != 2:
+        return None
+
+    if not isinstance(base, Add) or len(base.args) != 2:
+        return None
+
+    a, b = base.args
+
+    steps.append(Step(expr="(a+b)^2", explanation="Square of a sum"))
+    steps.append(Step(expr="a^2 + 2ab + b^2", explanation="Apply formula"))
+
+    expanded = expand(expr)
+
+    steps.append(Step(expr=str(expanded), explanation="Substitute values"))
+
+    return expanded
+
+
+# -----------------------------
+# (a-b)^2
+# -----------------------------
+
+def square_of_difference(expr, steps, Step):
+
+    if not expr.is_Pow:
+        return None
+
+    base, power = expr.args
+
+    if power != 2:
+        return None
+
+    if not isinstance(base, Add) or len(base.args) != 2:
+        return None
+
+    a, b = base.args
+
+    steps.append(Step(expr="(a-b)^2", explanation="Square of a difference"))
+    steps.append(Step(expr="a^2 - 2ab + b^2", explanation="Apply formula"))
+
+    expanded = expand(expr)
+
+    steps.append(Step(expr=str(expanded), explanation="Substitute values"))
+
+    return expanded
+
+
+# -----------------------------
+# (a-b)(a+b)
+# -----------------------------
+
+def difference_of_squares(expr, steps, Step):
+
+    if not isinstance(expr, Mul) or len(expr.args) != 2:
+        return None
+
+    left, right = expr.args
+
+    if not isinstance(left, Add) or not isinstance(right, Add):
+        return None
+
+    if len(left.args) != 2 or len(right.args) != 2:
+        return None
+
+    steps.append(Step(expr="(a-b)(a+b)", explanation="Difference of squares"))
+    steps.append(Step(expr="a^2 - b^2", explanation="Apply formula"))
+
+    expanded = expand(expr)
+
+    steps.append(Step(expr=str(expanded), explanation="Substitute values"))
+
+    return expanded
+
+
+# -----------------------------
+# (a+b)(c+d)  ← NOVO CASO
+# -----------------------------
+
+def binomial_times_binomial(expr, steps, Step):
+
+    if not isinstance(expr, Mul) or len(expr.args) != 2:
+        return None
+
+    left, right = expr.args
+
+    if not isinstance(left, Add) or not isinstance(right, Add):
+        return None
+
+    if len(left.args) != 2 or len(right.args) != 2:
+        return None
+
+    m, n = left.args
+    o, p = right.args
+
+    # modelo geral
+    steps.append(
+        Step(
+            expr="(m+n)(o+p)",
+            explanation="Product of two binomials"
+        )
+    )
+
+    # distributiva
+    steps.append(
+        Step(
+            expr="(m)(o)+(m)(p)+(n)(o)+(n)(p)",
+            explanation="Apply distributive property"
+        )
+    )
+
+    # substituição
+    substituted = f"({m})({o}) + ({m})({p}) + ({n})({o}) + ({n})({p})"
+
+    steps.append(
+        Step(
+            expr=substituted,
+            explanation="Substitute actual values"
+        )
+    )
+
+    expanded = expand(expr)
+
+    steps.append(
+        Step(
+            expr=str(expanded),
+            explanation="Combine like terms"
+        )
+    )
+
+    return expanded
