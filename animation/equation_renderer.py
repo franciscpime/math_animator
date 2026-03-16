@@ -32,12 +32,12 @@ class EquationRenderer:
             self.tex = new_tex
 
             if step.explanation:
-
                 explanation = Tex(step.explanation).scale(0.9)
                 explanation.next_to(self.tex, DOWN)
 
                 self.scene.play(Write(explanation))
+                self.scene.wait(1)
 
-                self.explanation_tex = explanation
+                self.scene.play(FadeOut(explanation))
 
             self.scene.wait(1)
