@@ -1,21 +1,25 @@
-import sympy as sp
-from models.step import EquationStep
+from sympy import expand
+from analyzers.notable_products import detect_notable
+from models.step import Step
 
-def solve_notable_product(expr):
-    from solvers.dispatcher import dispatch_solver
-    
+
+def solve(expr):
+
+    notable_type, match = detect_notable(expr)
+
+    if notable_type is None:
+        return None
+
+    expanded = expand(expr)
+
     steps = []
 
-    expanded = sp.expand(expr)
-
     steps.append(
-        EquationStep(
+        Step(
+            description="Aplicar caso notável",
             before=expr,
-            after=expanded,
-            explanation="Expand the product"
+            after=expanded
         )
     )
 
-    next_steps = dispatch_solver(expanded)
-
-    return steps + next_steps
+    return expanded, steps

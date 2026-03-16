@@ -1,6 +1,7 @@
 from solvers.linear_solver import solve_linear
 from solvers.quadratic_solver import solve_quadratic
 from solvers.polynomial_solver import solve_polynomial
+from solvers.notable_products_solver import solve as solve_notable
 
 
 def dispatch_solver(
@@ -34,5 +35,9 @@ def dispatch_solver(
             o,
             p
         )
+    result = solve_notable(expr)
 
+    if result:
+        return result
+    
     return solve_polynomial(polynomial, equation)

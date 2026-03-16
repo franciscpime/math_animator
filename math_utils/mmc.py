@@ -1,13 +1,13 @@
-import sympy as sp
+from sympy import lcm
+from functools import reduce
 
-def compute_mmc(polynomial):
 
-    coeffs = polynomial.all_coeffs()
+def mmc(expressions):
+    """
+    Calcula o mínimo múltiplo comum de vários denominadores.
+    """
 
-    denominators = []
+    if not expressions:
+        return None
 
-    for c in coeffs:
-        num, den = c.as_numer_denom()
-        denominators.append(den)
-
-    return sp.lcm(*denominators)
+    return reduce(lcm, expressions)
