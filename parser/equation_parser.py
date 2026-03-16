@@ -1,10 +1,12 @@
 import sympy as sp
 import re
 
+def normalize_expression(expr):
+    expr = expr.replace("^", "**")
 
-def normalize_expression(expr: str):
-    # transforma "(x+2)(x+3)" em "(x+2)*(x+3)"
-    expr = re.sub(r"\)\(", ")*(", expr)
+    # 2x → 2*x
+    expr = re.sub(r'(\d)([a-zA-Z])', r'\1*\2', expr)
+
     return expr
 
 

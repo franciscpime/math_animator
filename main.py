@@ -5,8 +5,9 @@ class SolveScene(Scene):
 
     def construct(self):
 
-        equation = "1/2 + 4 = 0"
+        equation = input("Equation: ")
 
         controller = AnimationController(self)
 
         controller.run(equation)
+

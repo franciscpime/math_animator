@@ -1,6 +1,7 @@
-class EquationStep:
+from dataclasses import dataclass
 
-    def __init__(self, before, after, explanation=None):
-        self.before = before
-        self.after = after
-        self.explanation = explanation
+@dataclass
+class Step:
+    before: str
+    after: str
+    explanation: str = ""

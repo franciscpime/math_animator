@@ -1,5 +1,5 @@
 import sympy as sp
-from models.step import EquationStep
+from models.step import Step
 from math_utils.mmc import compute_mmc
 
 x = sp.symbols("x")
@@ -12,7 +12,7 @@ def solve_linear(expr):
     solution = sp.solve(expr, x)
 
     steps.append(
-        EquationStep(
+        Step(
             before=expr,
             after=f"x={sp.latex(solution[0])}"
         )
