@@ -1,25 +1,14 @@
 from sympy import expand
-from analyzers.notable_products import detect_notable
+from analyzers.notable_products import notable_products
 from models.step import Step
 
 
 def solve(expr):
 
-    notable_type, match = detect_notable(expr)
+    steps = []
+    result = notable_products(expr, steps, Step)
 
-    if notable_type is None:
+    if result is None:
         return None
 
-    expanded = expand(expr)
-
-    steps = []
-
-    steps.append(
-        Step(
-            description="Aplicar caso notável",
-            before=expr,
-            after=expanded
-        )
-    )
-
-    return expanded, steps
+    return result, steps

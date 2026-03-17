@@ -5,6 +5,7 @@ from solvers.notable_products_solver import solve as solve_notable
 
 
 def dispatch_solver(
+    expr,
     polynomial,
     equation,
     mmc,
@@ -20,7 +21,7 @@ def dispatch_solver(
 
     if degree == 1:
 
-        return solve_linear(equation)
+        return solve_linear(expr)
 
     if degree == 2:
 

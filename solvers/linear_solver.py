@@ -2,11 +2,9 @@ import sympy as sp
 from models.step import Step
 from math_utils.mmc import compute_mmc
 
-x = sp.symbols("x")
-
-
 def solve_linear(expr):
-
+    x = sp.symbols("x")
+    
     steps = []
 
     solution = sp.solve(expr, x)

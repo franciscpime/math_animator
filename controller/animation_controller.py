@@ -55,6 +55,7 @@ class AnimationController:
             scaled_expression = expr
 
         steps = dispatch_solver(
+            expr,
             polynomial,
             equation,
             mmc,
