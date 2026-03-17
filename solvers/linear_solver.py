@@ -1,4 +1,5 @@
 import sympy as sp  
+from sympy import lcm
 import re  
 from models.step import Step  
 from parser.equation_parser import parse_equation  
@@ -79,6 +80,71 @@ def combine_terms_stepwise(terms):
     return steps                                # Devolve todos os passos de simplificação
 
 
+def substitution_steps(expr, value):
+    steps = []
+
+    # 1. Substituir x
+    expr_sub = expr.subs(x, value)
+    steps.append(expr_sub)
+
+    # 2. Procurar multiplicações e expandir passo a passo
+    if isinstance(expr_sub, sp.Add):
+        new_expr = expr_sub
+
+        for arg in expr_sub.args:
+            if isinstance(arg, sp.Mul):
+                mul_steps = detailed_multiplication(arg)
+
+                for m in mul_steps:
+                    new_expr = new_expr.subs(arg, m)
+                    steps.append(new_expr)
+
+                break  # só trata uma de cada vez (mais bonito visualmente)
+
+    # 3. Soma final
+    final = sp.simplify(steps[-1])
+    if final != steps[-1]:
+        steps.append(final)
+
+    return steps
+
+
+def detailed_multiplication(expr):
+    steps = []
+
+    if isinstance(expr, sp.Mul):
+        args = expr.args
+
+        # Ex: 12 * (-1/12)
+        nums = []
+        dens = []
+
+        for a in args:
+            if isinstance(a, sp.Rational):
+                nums.append(a.p)
+                dens.append(a.q)
+            else:
+                nums.append(a)
+                dens.append(1)
+
+        # PASSO 1: forma explícita (-1*12/12)
+        num_expr = sp.Mul(*nums)
+        den_expr = sp.Mul(*dens)
+
+        step1 = sp.Mul(num_expr, sp.Pow(den_expr, -1))
+        steps.append(step1)
+
+        # PASSO 2: numerador resolvido (-12/12)
+        step2 = sp.together(step1)
+        steps.append(step2)
+
+        # PASSO 3: simplificado (-1)
+        step3 = sp.simplify(step2)
+        steps.append(step3)
+
+    return steps
+
+
 # Função principal que resolve equações lineares passo a passo
 def solve_linear(equation: str):  
     
@@ -126,8 +192,9 @@ def solve_linear(equation: str):
 
     steps.append(
         Step(
-            before = equation,  
-            after = new_eq  
+            before=new_eq,
+            after=new_eq,
+            explanation="Let's solve the left side"
         )
     )
 
@@ -142,8 +209,9 @@ def solve_linear(equation: str):
 
         steps.append(
             Step(
-                before=before,  
-                after=after  
+                before=build_equation(current_vars, constant_terms),
+                after=build_equation(current_vars, constant_terms),
+            explanation="Now let's solve the right side"
             )
         )
         
@@ -173,31 +241,126 @@ def solve_linear(equation: str):
     final_left = current_vars[0]        # Termo final com x (ex: -10x)
     final_right = current_consts[0]     # Valor final constante (ex: 4)
 
-    coef = final_left.coeff(x)          # Extrai coeficiente de x (ex: -10)
-    const = final_right                 # Valor constante
+    coef = final_left.coeff(x)
+    const = final_right
 
-    # PASSO 1: fração não simplificada
-    unsimplified = sp.Rational(const, coef)  # Cria a fração (ex: 4/(-10))
-
-    steps.append(
-        Step(
-            before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",     # Equação antes da divisão
-            after=f"x = \\frac{{{sp.latex(const)}}}{{{sp.latex(coef)}}}"    # Resultado como fração
-        )
-    )
-
-    # PASSO 2: simplificar (se necessário)
-    simplified = sp.simplify(unsimplified)  # Simplifica a fração
-    
-    # Só adiciona passo se houver simplificação
-    if simplified != unsimplified:  
+    # CASO 1: já está resolvido (tipo x = 3)
+    if coef == 1:
         steps.append(
             Step(
-                before=f"x = \\frac{{{sp.latex(const)}}}{{{sp.latex(coef)}}}",  # Fração original
-                after=f"x = {sp.latex(simplified)}"                             # Fração simplificada
+                before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
+                after=f"x = {sp.latex(const)}"
             )
         )
 
-    return steps                   # Devolve todos os passos para animação
+    # CASO 2: precisa dividir (tipo 12x = -1)
+    else:
+        num_raw = const
+        den_raw = coef
+
+        sign = "-" if (num_raw * den_raw) < 0 else ""
+
+        numerator = abs(int(num_raw))
+        denominator = abs(int(den_raw))
+
+        divisor = sp.gcd(numerator, denominator)
+
+        unsimplified_latex = f"{sign}\\frac{{{numerator}}}{{{denominator}}}"
+
+        simplified = sp.simplify(const / coef)
+        simplified_latex = sp.latex(simplified)
+
+        # PASSO divisão
+        steps.append(
+            Step(
+                before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
+                after=f"x = {unsimplified_latex}",
+                explanation=f"Let's divide by {coef}"
+            )
+        )
+
+        # PASSO simplificação (se necessário)
+        if simplified_latex != unsimplified_latex:
+            steps.append(
+                Step(
+                    before=f"x = {unsimplified_latex}",
+                    after=f"x = {simplified_latex}"
+                )
+            )
+
+    steps.append(
+        Step(
+            before="",
+            after="",                                  
+            explanation = "Let's check!"
+        )
+    )
+
+    steps.append(
+        Step(
+            before="",
+            after=equation,                                  
+            explanation = f"Now let's replace x by ${simplified_latex}$"
+        )
+    )
+
+    substituted = equation.replace("x", f"({simplified_latex})")
+
+    steps.append(
+        Step(
+            before=equation,
+            after=substituted        
+        )
+    )
+
+    left_expr = sp.sympify(left)
+    right_expr = sp.sympify(right)
+
+    left_steps = substitution_steps(left_expr, simplified)
+    right_steps = substitution_steps(right_expr, simplified)
+
+    current_left = sp.latex(left_expr)
+    current_right = sp.latex(right_expr)
+
+    for i in range(max(len(left_steps), len(right_steps))):
+
+        before = f"{current_left} = {current_right}"
+
+        if i < len(left_steps):
+            current_left = sp.latex(left_steps[i])
+
+        if i < len(right_steps):
+            current_right = sp.latex(right_steps[i])
+
+        after = f"{current_left} = {current_right}"
+
+        steps.append(
+            Step(
+                before=before,
+                after=after
+            )
+        )
+
+    # Último estado depois da substituição step-by-step
+    final_left = left_steps[-1] if left_steps else left_expr.subs(x, simplified)
+    final_right = right_steps[-1] if right_steps else right_expr.subs(x, simplified)
+
+    # Verificação lógica (sem mostrar novo passo de simplificação)
+    is_true = sp.simplify(final_left - final_right) == 0
+
+    if is_true:
+        explanation = "A solução está correta"
+    else:
+        explanation = "A solução não verifica a equação"
+
+    steps.append(
+        Step(
+            before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
+            after=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
+            explanation=explanation
+        )
+    )
+             
+    return steps            # Devolve todos os passos para animação
 
 
