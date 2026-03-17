@@ -1,44 +1,27 @@
+import sympy as sp
 from solvers.linear_solver import solve_linear
 from solvers.quadratic_solver import solve_quadratic
-from solvers.polynomial_solver import solve_polynomial
-from solvers.notable_products_solver import solve as solve_notable
+from parser.equation_parser import normalize_expression
+
+x = sp.symbols("x")
 
 
-def dispatch_solver(
-    expr,
-    polynomial,
-    equation,
-    mmc,
-    scaled_expression,
-    is_factorized,
-    m,
-    n,
-    o,
-    p
-):
+def dispatch_solver(equation: str):
 
-    degree = polynomial.degree()
+    left, right = equation.split("=")
+
+    right_norm = normalize_expression(right.strip().replace(" ", ""))
+    left_norm = normalize_expression(left.strip().replace(" ", ""))
+
+    expr = sp.expand(sp.sympify(f"{left_norm}-({right_norm})"))
+    poly = sp.Poly(expr, x)
+
+    degree = poly.degree()
 
     if degree == 1:
-
-        return solve_linear(expr)
+        return solve_linear(equation)
 
     if degree == 2:
+        return solve_quadratic(equation)
 
-        return solve_quadratic(
-            polynomial,
-            equation,
-            mmc,
-            scaled_expression,
-            is_factorized,
-            m,
-            n,
-            o,
-            p
-        )
-    result = solve_notable(expr)
-
-    if result:
-        return result
-    
-    return solve_polynomial(polynomial, equation)
+    raise ValueError("Unsupported equation type")

@@ -54,17 +54,6 @@ class AnimationController:
 
             scaled_expression = expr
 
-        steps = dispatch_solver(
-            expr,
-            polynomial,
-            equation,
-            mmc,
-            scaled_expression,
-            is_factorized,
-            m,
-            n,
-            o,
-            p
-        )
+        steps = dispatch_solver(equation)
 
         self.renderer.animate(steps)
