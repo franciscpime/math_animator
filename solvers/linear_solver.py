@@ -215,6 +215,7 @@ def solve_linear(equation: str):
             )
         )
         
+        
         # Atualiza estado
         current_vars = new_vars  
 
@@ -353,6 +354,7 @@ def solve_linear(equation: str):
     else:
         explanation = "A solução não verifica a equação"
 
+
     steps.append(
         Step(
             before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
@@ -360,7 +362,9 @@ def solve_linear(equation: str):
             explanation=explanation
         )
     )
-             
+
+    
+
     return steps            # Devolve todos os passos para animação
 
 
