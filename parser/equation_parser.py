@@ -12,6 +12,21 @@ def normalize_expression(expr):
     return expr
 
 
+def expand_multiplications(expr: str):
+    matches = re.findall(r'(\d+)\((\-?\d+)\)', expr)
+
+    if not matches:
+        return None
+
+    new_expr = expr
+
+    for a, b in matches:
+        result = int(a) * int(b)
+        new_expr = new_expr.replace(f"{a}({b})", str(result))
+
+    return new_expr
+
+
 def parse_equation(equation: str):
 
     left, right = equation.split("=")

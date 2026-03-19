@@ -83,27 +83,11 @@ def combine_terms_stepwise(terms):
 def substitution_steps(expr, value):
     steps = []
 
-    # 1. Substituir x
     expr_sub = expr.subs(x, value)
     steps.append(expr_sub)
 
-    # 2. Procurar multiplicações e expandir passo a passo
-    if isinstance(expr_sub, sp.Add):
-        new_expr = expr_sub
-
-        for arg in expr_sub.args:
-            if isinstance(arg, sp.Mul):
-                mul_steps = detailed_multiplication(arg)
-
-                for m in mul_steps:
-                    new_expr = new_expr.subs(arg, m)
-                    steps.append(new_expr)
-
-                break  # só trata uma de cada vez (mais bonito visualmente)
-
-    # 3. Soma final
-    final = sp.simplify(steps[-1])
-    if final != steps[-1]:
+    final = sp.simplify(expr_sub)
+    if final != expr_sub:
         steps.append(final)
 
     return steps
@@ -188,54 +172,55 @@ def solve_linear(equation: str):
     constant_terms = right_const + [-t for t in left_const]
 
     # Cria a equação após reorganização
+    # Cria a equação após reorganização
     new_eq = build_equation(variable_terms, constant_terms)  
 
-    steps.append(
-        Step(
-            before=new_eq,
-            after=new_eq,
-            explanation="Let's solve the left side"
+    # Mensagem inicial (só lado esquerdo)
+    if len(variable_terms) > 1:
+        steps.append(
+            Step(
+                before=new_eq,
+                after=new_eq,
+                explanation="Let's solve the left side"
+            )
         )
-    )
 
-    # Simplify variables
-    current_vars = variable_terms                       # Estado atual dos termos com x
-    var_steps = combine_terms_stepwise(variable_terms)  # Passos de simplificação
-    
-    # Percorre cada passo
-    for new_vars in var_steps:  
-        before = build_equation(current_vars, constant_terms)  # Antes da simplificação
-        after = build_equation(new_vars, constant_terms)        # Depois da simplificação
+    # --- Simplify variables ---
+    current_vars = variable_terms
+    var_steps = combine_terms_stepwise(variable_terms)
 
+    for new_vars in var_steps:
         steps.append(
             Step(
                 before=build_equation(current_vars, constant_terms),
-                after=build_equation(current_vars, constant_terms),
-            explanation="Now let's solve the right side"
+                after=build_equation(new_vars, constant_terms)
             )
         )
-        
-        
-        # Atualiza estado
-        current_vars = new_vars  
+        current_vars = new_vars
 
-    # Simplify constants
-    current_consts = constant_terms                         # Estado atual das constantes
-    const_steps = combine_terms_stepwise(constant_terms)    # Passos de simplificação
 
-    # Percorre cada passo
-    for new_consts in const_steps:      
-        before = build_equation(current_vars, current_consts)  
-        after = build_equation(current_vars, new_consts)  
+    # --- Simplify constants ---
+    current_consts = constant_terms
 
+    # Mensagem lado direito
+    if len(constant_terms) > 1:
         steps.append(
             Step(
-                before=before,  
-                after=after  
+                before=build_equation(current_vars, current_consts),
+                after=build_equation(current_vars, current_consts),
+                explanation="Now let's solve the right side"
             )
         )
-        
-        # Atualiza estado
+
+    const_steps = combine_terms_stepwise(constant_terms)
+
+    for new_consts in const_steps:
+        steps.append(
+            Step(
+                before=build_equation(current_vars, current_consts),
+                after=build_equation(current_vars, new_consts)
+            )
+        )
         current_consts = new_consts  
 
     # Final solve
@@ -268,8 +253,17 @@ def solve_linear(equation: str):
 
         unsimplified_latex = f"{sign}\\frac{{{numerator}}}{{{denominator}}}"
 
-        simplified = sp.simplify(const / coef)
-        simplified_latex = sp.latex(simplified)
+        raw_fraction = sp.Rational(const, coef)
+
+        # PASSO 1: fração simplificada mas ainda como fração (5/1)
+        reduced_num = raw_fraction.p
+        reduced_den = raw_fraction.q
+
+        fraction_latex = f"\\frac{{{reduced_num}}}{{{reduced_den}}}"
+
+        # PASSO 2: resultado final
+        final_value = reduced_num if reduced_den == 1 else raw_fraction
+        final_latex = sp.latex(final_value)
 
         # PASSO divisão
         steps.append(
@@ -281,14 +275,22 @@ def solve_linear(equation: str):
         )
 
         # PASSO simplificação (se necessário)
-        if simplified_latex != unsimplified_latex:
+        if fraction_latex != unsimplified_latex:
             steps.append(
                 Step(
                     before=f"x = {unsimplified_latex}",
-                    after=f"x = {simplified_latex}"
+                    after=f"x = {fraction_latex}"
                 )
             )
 
+        if reduced_den == 1:
+            steps.append(
+                Step(
+                    before=f"x = {fraction_latex}",
+                    after=f"x = {final_latex}"
+                )
+            )
+            
     steps.append(
         Step(
             before="",
@@ -301,11 +303,11 @@ def solve_linear(equation: str):
         Step(
             before="",
             after=equation,                                  
-            explanation = f"Now let's replace x by ${simplified_latex}$"
+            explanation = f"Now let's replace x by ${final_latex}$"
         )
     )
 
-    substituted = equation.replace("x", f"({simplified_latex})")
+    substituted = equation.replace("x", f"({final_value})")
 
     steps.append(
         Step(
@@ -314,11 +316,11 @@ def solve_linear(equation: str):
         )
     )
 
-    left_expr = sp.sympify(left)
-    right_expr = sp.sympify(right)
+    left_expr = sp.sympify(left, evaluate=False)
+    right_expr = sp.sympify(right, evaluate=False)
 
-    left_steps = substitution_steps(left_expr, simplified)
-    right_steps = substitution_steps(right_expr, simplified)
+    left_steps = substitution_steps(left_expr, final_value)
+    right_steps = substitution_steps(right_expr, final_value)
 
     current_left = sp.latex(left_expr)
     current_right = sp.latex(right_expr)
@@ -343,8 +345,8 @@ def solve_linear(equation: str):
         )
 
     # Último estado depois da substituição step-by-step
-    final_left = left_steps[-1] if left_steps else left_expr.subs(x, simplified)
-    final_right = right_steps[-1] if right_steps else right_expr.subs(x, simplified)
+    final_left = left_steps[-1] if left_steps else left_expr.subs(x, final_value)
+    final_right = right_steps[-1] if right_steps else right_expr.subs(x, final_value)
 
     # Verificação lógica (sem mostrar novo passo de simplificação)
     is_true = sp.simplify(final_left - final_right) == 0
@@ -366,5 +368,4 @@ def solve_linear(equation: str):
     
 
     return steps            # Devolve todos os passos para animação
-
 

@@ -1,0 +1,3 @@
+# This file is used internally by FFMPEG.
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math_animator/media/videos/scene/480p15/partial_movie_files/SolveScene/1584795214_3589123942_223132457.mp4'
+file 'file:/Users/franciscopontepimentel/Desktop/math_animator/math_animator/media/videos/scene/480p15/partial_movie_files/SolveScene/4072820271_2834709167_4193653726.mp4'

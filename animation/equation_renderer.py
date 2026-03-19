@@ -1,6 +1,8 @@
 import sympy as sp
 from manim import *
 from utils.latex_formatter import to_latex
+from parser.equation_parser import expand_multiplications
+import re
 
 
 class EquationRenderer:
@@ -20,15 +22,31 @@ class EquationRenderer:
 
         for step in steps:
 
-            after = to_latex(step.after)
+            before = step.before
+            after = step.after
 
-            new_tex = MathTex(after).scale(1.4)
-            new_tex.move_to(self.tex)
+            # print("BEFORE:", before)
 
-            self.scene.play(
-                ReplacementTransform(self.tex, new_tex)
+            # 🔥 passo intermédio simples
+            expanded = re.sub(
+                r'(\d+)\((\-?\d+)\)',
+                lambda m: str(int(m.group(1)) * int(m.group(2))),
+                before
             )
 
+            if expanded != before:
+                mid_tex = MathTex(to_latex(expanded)).scale(1.4)
+                mid_tex.move_to(self.tex)
+
+                self.scene.play(ReplacementTransform(self.tex, mid_tex))
+                self.tex = mid_tex
+                self.scene.wait(1)
+
+            # passo normal
+            new_tex = MathTex(to_latex(after)).scale(1.4)
+            new_tex.move_to(self.tex)
+
+            self.scene.play(ReplacementTransform(self.tex, new_tex))
             self.tex = new_tex
 
             if step.explanation:

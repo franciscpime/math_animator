@@ -20,3 +20,4 @@ def extract_terms(expression: str):
         sympy_terms.append(sp.parse_expr(term))
 
     return sympy_terms
+
