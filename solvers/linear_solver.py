@@ -298,81 +298,105 @@ def solve_linear(equation: str):
                 )
             )
             
-    steps.append(
-        Step(
-            before="",
-            after="",                                  
-            explanation = "Let's check!"
-        )
-    )
-
-    steps.append(
-        Step(
-            before="",
-            after=equation,                                  
-            explanation = f"Now let's replace x by ${final_latex}$"
-        )
-    )
-
-    substituted = equation.replace("x", f"({final_value})")
-
-    steps.append(
-        Step(
-            before=equation,
-            after=substituted        
-        )
-    )
-
-    left_expr = sp.sympify(left, evaluate=False)
-    right_expr = sp.sympify(right, evaluate=False)
-
-    left_steps = substitution_steps(left_expr, final_value)
-    right_steps = substitution_steps(right_expr, final_value)
-
-    current_left = sp.latex(left_expr)
-    current_right = sp.latex(right_expr)
-
-    for i in range(max(len(left_steps), len(right_steps))):
-
-        before = f"{current_left} = {current_right}"
-
-        if i < len(left_steps):
-            current_left = sp.latex(left_steps[i])
-
-        if i < len(right_steps):
-            current_right = sp.latex(right_steps[i])
-
-        after = f"{current_left} = {current_right}"
+        # --- CHECK SOLUTION ---
 
         steps.append(
             Step(
-                before=before,
-                after=after
+                before="",
+                after="",
+                explanation="Let's check!"
             )
         )
 
-    # Último estado depois da substituição step-by-step
-    final_left = left_steps[-1] if left_steps else left_expr.subs(x, final_value)
-    final_right = right_steps[-1] if right_steps else right_expr.subs(x, final_value)
-
-    # Verificação lógica (sem mostrar novo passo de simplificação)
-    is_true = sp.simplify(final_left - final_right) == 0
-
-    if is_true:
-        explanation = "A solução está correta"
-    else:
-        explanation = "A solução não verifica a equação"
-
-
-    steps.append(
-        Step(
-            before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
-            after=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
-            explanation=explanation
+        steps.append(
+            Step(
+                before="",
+                after=equation,
+                explanation=f"Now let's replace x by ${final_latex}$"
+            )
         )
-    )
+
+        substituted = equation.replace("x", f"({final_value})")
+
+        steps.append(
+            Step(
+                before=equation,
+                after=substituted
+            )
+        )
+
+        # -------- STRING-BASED STEP SOLVER --------
+
+        def stepwise_string_eval(expr):
+            steps_local = []
+
+            current = expr
+
+            # PASSO 1: multiplicações tipo 10(5)
+            mult_pattern = r'(\d+)\((\-?\d+)\)'
+
+            while re.search(mult_pattern, current):
+                new = re.sub(
+                    mult_pattern,
+                    lambda m: str(int(m.group(1)) * int(m.group(2))),
+                    current
+                )
+                steps_local.append(new)
+                current = new
+
+            # PASSO 2: soma final
+            try:
+                result = str(eval(current))
+                if result != current:
+                    steps_local.append(result)
+            except:
+                pass
+
+            return steps_local
+
+        # aplicar aos dois lados
+        left_steps = stepwise_string_eval(substituted.split("=")[0])
+        right_steps = stepwise_string_eval(substituted.split("=")[1])
+
+        current_left = substituted.split("=")[0]
+        current_right = substituted.split("=")[1]
+
+        for i in range(max(len(left_steps), len(right_steps))):
+
+            before = f"{current_left} = {current_right}"
+
+            if i < len(left_steps):
+                current_left = left_steps[i]
+
+            if i < len(right_steps):
+                current_right = right_steps[i]
+
+            after = f"{current_left} = {current_right}"
+
+            steps.append(
+                Step(
+                    before=before,
+                    after=after
+                )
+            )
+
+        # -------- VERIFICAÇÃO FINAL COM SYMPY --------
+
+        left_final = sp.sympify(current_left)
+        right_final = sp.sympify(current_right)
+
+        is_true = sp.simplify(left_final - right_final) == 0
+
+        explanation = "A solução está correta" if is_true else "A solução não verifica a equação"
+
+        steps.append(
+            Step(
+                before=f"{current_left} = {current_right}",
+                after=f"{current_left} = {current_right}",
+                explanation=explanation
+            )
+        )
 
     
-
     return steps            # Devolve todos os passos para animação
 
