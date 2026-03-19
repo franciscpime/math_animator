@@ -83,11 +83,18 @@ def combine_terms_stepwise(terms):
 def substitution_steps(expr, value):
     steps = []
 
-    expr_sub = expr.subs(x, value)
+    # PASSO 1: substituição sem avaliar tudo
+    expr_sub = expr.subs(x, sp.Integer(value), evaluate=False)
     steps.append(expr_sub)
 
-    final = sp.simplify(expr_sub)
-    if final != expr_sub:
+    # PASSO 2: expandir multiplicações (ex: 10*(5) → 50)
+    expanded = sp.expand(expr_sub)
+    if expanded != expr_sub:
+        steps.append(expanded)
+
+    # PASSO 3: simplificar tudo (ex: 50 + 20 → 70)
+    final = sp.simplify(expanded)
+    if final != expanded:
         steps.append(final)
 
     return steps
