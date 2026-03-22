@@ -146,7 +146,7 @@ def _collect_mul_add_steps(sym: sp.Basic) -> tuple[list[tuple[sp.Basic, sp.Basic
     """
     Percorre o AST SymPy de 'sym' (mantido sem avaliar) e devolve:
       - uma lista de pares (before, after): cada par representa uma redução
-        aritmética elementar que foi feita (ex: Mul(2,3) → 6)
+        aritmética elementar que foi feita (ex: Mul(2,3) >> 6)
       - a expressão final depois de todas as reduções
 
     Ordem de processamento:
@@ -171,7 +171,7 @@ def _collect_mul_add_steps(sym: sp.Basic) -> tuple[list[tuple[sp.Basic, sp.Basic
         Recursivo em post-order para tratar sub-expressões internas primeiro.
         """
         if isinstance(expr, sp.Mul) and all(a.is_number for a in expr.args):
-            # Avaliar intencionalmente: 2*3 → 6
+            # Avaliar intencionalmente: 2*3 >> 6
             result = sp.Mul(*expr.args)
             pairs.append((expr, result))
             return result
@@ -197,7 +197,7 @@ def _collect_mul_add_steps(sym: sp.Basic) -> tuple[list[tuple[sp.Basic, sp.Basic
         Recursivo em post-order — idêntico a _reduce_muls mas para somas.
         """
         if isinstance(expr, sp.Add) and all(a.is_number for a in expr.args):
-            # Avaliar intencionalmente: 1+6 → 7
+            # Avaliar intencionalmente: 1+6 >> 7
             result = sp.Add(*expr.args)
             pairs.append((expr, result))
             return result
@@ -248,7 +248,7 @@ def stepwise_string_eval(expr_str: str) -> list[str]:
     """
     expr_str = expr_str.strip()
 
-    # Tratar multiplicação implícita como "2(3)" → "2*(3)"
+    # Tratar multiplicação implícita como "2(3)" >> "2*(3)"
     cleaned = fix_implicit_mul(expr_str)
     sym = safe_sympify(cleaned)
 
@@ -397,7 +397,7 @@ def solve_linear(equation: str) -> list[Step]:
             )
         )
 
-    # --- Simplificar os termos com x ---
+    # Simplificar os termos com x
     current_vars = variable_terms
     var_steps = combine_terms_stepwise(variable_terms)
 
@@ -411,7 +411,7 @@ def solve_linear(equation: str) -> list[Step]:
         )
         current_vars = new_vars
 
-    # --- Simplificar as constantes ---
+    # Simplificar as constantes
     current_consts = constant_terms
 
     # Se houver mais do que uma constante, anunciar que vamos simplificá-las
@@ -610,7 +610,7 @@ def solve_linear(equation: str) -> list[Step]:
         # Construir a string LaTeX da substituição directamente sobre a string
         # da equação original — desta forma a ordem dos termos é preservada.
         # Não usamos xreplace aqui porque o SymPy reordena os args do Add
-        # quando substitui um símbolo por um número (ex: 2x+1 → 1+2·3).
+        # quando substitui um símbolo por um número (ex: 2x+1 >> 1+2·3).
         left_latex_orig  = sp.latex(left_sym, order='none')
         right_latex_orig = sp.latex(right_sym, order='none')
         val_latex = sp.latex(final_value)
@@ -636,7 +636,7 @@ def solve_linear(equation: str) -> list[Step]:
             )
         )
 
-        # Para os passos aritméticos (ex: 2·3 → 6 → 7) usamos o AST SymPy,
+        # Para os passos aritméticos (ex: 2·3 >> 6 >> 7) usamos o AST SymPy,
         # que garante que as reduções são feitas uma a uma correctamente.
         # xreplace com UnevaluatedExpr impede a avaliação imediata.
         left_evaled  = left_sym.xreplace({x: sp.UnevaluatedExpr(final_value)})
@@ -679,7 +679,7 @@ def solve_linear(equation: str) -> list[Step]:
             )
         )
 
-    # --- CASO 1: o coeficiente de x já é 1 (ex: x = 3) ---
+    # CASO 1: o coeficiente de x já é 1 (ex: x = 3)
     # Não é preciso dividir — x já está isolado
     if coef == 1:
         steps.append(
@@ -693,7 +693,7 @@ def solve_linear(equation: str) -> list[Step]:
         final_latex = sp.latex(final_value)
         _check_solution(final_value, final_latex, equation, steps)
 
-    # --- CASO 2: o coeficiente de x é diferente de 1 (ex: 2x = 6) ---
+    # CASO 2: o coeficiente de x é diferente de 1 (ex: 2x = 6)
     # É necessário dividir ambos os lados pelo coeficiente
     else:
         # Calcular a solução como racional para preservar frações exactas
@@ -708,7 +708,7 @@ def solve_linear(equation: str) -> list[Step]:
                 explanation=f"Dividir ambos os lados por {sp.latex(coef)}"
             )
         )
-        # Mostrar a transição real: 2x=6 → x=3
+        # Mostrar a transição real: 2x=6 >> x=3
         steps.append(
             Step(
                 before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
