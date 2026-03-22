@@ -1,36 +1,22 @@
 import os
 from manim import *
-
-# vai buscar expressão do main.py
-EXPRESSION = os.environ.get("MATH_ANIMATOR_EXPR", "x+1")
-
-
-# ---------------------------
-# A TUA LÓGICA (liga ao teu projeto)
-# ---------------------------
-class SolveSceneLogic:
-    def build(self, scene, expr_str):
-        # aqui ligas ao teu engine
-        # exemplo simples:
-        tex = MathTex(expr_str)
-
-        scene.play(Write(tex))
-        scene.wait()
-
-        # depois substituis isto pelos teus Steps:
-        # steps = solve(expr_str)
-        # for step in steps:
-        #     scene.play(step.to_animation())
-
-
+from controller.animation_controller import AnimationController  # FIX G: ligado ao controller real
+ 
+EXPRESSION = os.environ.get("MATH_ANIMATOR_EXPR", "x+1=0")
+ 
+ 
 # ---------------------------
 # RENDER NORMAL
 # ---------------------------
 class SolveScene(Scene):
     def construct(self):
-        SolveSceneLogic().build(self, EXPRESSION)
-
-
+        equation = os.environ.get("MATH_ANIMATOR_EXPR", "x+1=0")
+ 
+        # FIX G: usa AnimationController em vez do SolveSceneLogic placeholder
+        controller = AnimationController(self)
+        controller.run(equation)
+ 
+ 
 # ---------------------------
 # MODO INTERATIVO
 # ---------------------------
@@ -38,10 +24,12 @@ class SolveSceneInteractive(Scene):
     def construct(self):
         while True:
             expr = input(">>> nova expressão (ou 'exit'): ")
-
+ 
             if expr == "exit":
                 break
-
+ 
             self.clear()
-
-            SolveSceneLogic().build(self, expr)
+ 
+            controller = AnimationController(self)
+            controller.run(expr)
+ 

@@ -37,3 +37,34 @@ def parse_equation(equation: str):
     right = normalize_expression(right)
 
     return left, right
+
+
+def latex_to_sympy(expr: str) -> str:
+    """Converte notação LaTeX básica para sintaxe que o sympify consegue parsear."""
+    expr = re.sub(r'\\frac\{([^}]+)\}\{([^}]+)\}', r'(\1)/(\2)', expr)
+    expr = expr.replace("\\", "")
+    return expr.strip()
+
+
+def fix_implicit_mul(expr: str):
+    # 10(3/4) → 10*(3/4)
+    return re.sub(r'(\d)\(', r'\1*(', expr)
+
+
+def safe_sympify(expr: str) -> sp.Basic:
+    from sympy.parsing.latex import parse_latex as _parse_latex
+
+    expr = expr.strip()
+
+    try:
+        parsed = _parse_latex(expr)
+        return sp.sympify(parsed, evaluate=False)
+    except Exception:
+        pass
+
+    try:
+        cleaned = latex_to_sympy(expr)
+        cleaned = fix_implicit_mul(cleaned)
+        return sp.sympify(cleaned, evaluate=False)  # 🔥 AQUI ESTÁ O FIX
+    except Exception:
+        return sp.nan

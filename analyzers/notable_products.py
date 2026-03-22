@@ -1,4 +1,4 @@
-from sympy import expand, expand_mul
+from sympy import expand
 from sympy.core.mul import Mul
 from sympy.core.add import Add
 
@@ -8,7 +8,6 @@ def notable_products(expr, steps, Step):
     Detects and handles notable products.
     If none match, checks for a general binomial product.
     """
-
     result = square_of_sum(expr, steps, Step)
     if result is not None:
         return result
@@ -31,9 +30,7 @@ def notable_products(expr, steps, Step):
 # -----------------------------
 # (a+b)^2
 # -----------------------------
-
 def square_of_sum(expr, steps, Step):
-
     if not expr.is_Pow:
         return None
 
@@ -46,13 +43,23 @@ def square_of_sum(expr, steps, Step):
         return None
 
     a, b = base.args
-
-    steps.append(Step(expr="(a+b)^2", explanation="Square of a sum"))
-    steps.append(Step(expr="a^2 + 2ab + b^2", explanation="Apply formula"))
-
     expanded = expand(expr)
 
-    steps.append(Step(expr=str(expanded), explanation="Substitute values"))
+    steps.append(Step(
+        before=str(expr),
+        after="(a+b)^2",
+        explanation="Square of a sum"
+    ))
+    steps.append(Step(
+        before="(a+b)^2",
+        after="a^2 + 2ab + b^2",
+        explanation="Apply formula"
+    ))
+    steps.append(Step(
+        before="a^2 + 2ab + b^2",
+        after=str(expanded),
+        explanation="Substitute values"
+    ))
 
     return expanded
 
@@ -60,9 +67,7 @@ def square_of_sum(expr, steps, Step):
 # -----------------------------
 # (a-b)^2
 # -----------------------------
-
 def square_of_difference(expr, steps, Step):
-
     if not expr.is_Pow:
         return None
 
@@ -75,13 +80,23 @@ def square_of_difference(expr, steps, Step):
         return None
 
     a, b = base.args
-
-    steps.append(Step(expr="(a-b)^2", explanation="Square of a difference"))
-    steps.append(Step(expr="a^2 - 2ab + b^2", explanation="Apply formula"))
-
     expanded = expand(expr)
 
-    steps.append(Step(expr=str(expanded), explanation="Substitute values"))
+    steps.append(Step(
+        before=str(expr),
+        after="(a-b)^2",
+        explanation="Square of a difference"
+    ))
+    steps.append(Step(
+        before="(a-b)^2",
+        after="a^2 - 2ab + b^2",
+        explanation="Apply formula"
+    ))
+    steps.append(Step(
+        before="a^2 - 2ab + b^2",
+        after=str(expanded),
+        explanation="Substitute values"
+    ))
 
     return expanded
 
@@ -89,9 +104,7 @@ def square_of_difference(expr, steps, Step):
 # -----------------------------
 # (a-b)(a+b)
 # -----------------------------
-
 def difference_of_squares(expr, steps, Step):
-
     if not isinstance(expr, Mul) or len(expr.args) != 2:
         return None
 
@@ -103,22 +116,31 @@ def difference_of_squares(expr, steps, Step):
     if len(left.args) != 2 or len(right.args) != 2:
         return None
 
-    steps.append(Step(expr="(a-b)(a+b)", explanation="Difference of squares"))
-    steps.append(Step(expr="a^2 - b^2", explanation="Apply formula"))
-
     expanded = expand(expr)
 
-    steps.append(Step(expr=str(expanded), explanation="Substitute values"))
+    steps.append(Step(
+        before=str(expr),
+        after="(a-b)(a+b)",
+        explanation="Difference of squares"
+    ))
+    steps.append(Step(
+        before="(a-b)(a+b)",
+        after="a^2 - b^2",
+        explanation="Apply formula"
+    ))
+    steps.append(Step(
+        before="a^2 - b^2",
+        after=str(expanded),
+        explanation="Substitute values"
+    ))
 
     return expanded
 
 
 # -----------------------------
-# (a+b)(c+d)  ← NOVO CASO
+# (a+b)(c+d)
 # -----------------------------
-
 def binomial_times_binomial(expr, steps, Step):
-
     if not isinstance(expr, Mul) or len(expr.args) != 2:
         return None
 
@@ -133,39 +155,29 @@ def binomial_times_binomial(expr, steps, Step):
     m, n = left.args
     o, p = right.args
 
-    # modelo geral
-    steps.append(
-        Step(
-            expr="(m+n)(o+p)",
-            explanation="Product of two binomials"
-        )
-    )
-
-    # distributiva
-    steps.append(
-        Step(
-            expr="(m)(o)+(m)(p)+(n)(o)+(n)(p)",
-            explanation="Apply distributive property"
-        )
-    )
-
-    # substituição
     substituted = f"({m})({o}) + ({m})({p}) + ({n})({o}) + ({n})({p})"
-
-    steps.append(
-        Step(
-            expr=substituted,
-            explanation="Substitute actual values"
-        )
-    )
-
     expanded = expand(expr)
 
-    steps.append(
-        Step(
-            expr=str(expanded),
-            explanation="Combine like terms"
-        )
-    )
+    steps.append(Step(
+        before=str(expr),
+        after="(m+n)(o+p)",
+        explanation="Product of two binomials"
+    ))
+    steps.append(Step(
+        before="(m+n)(o+p)",
+        after="(m)(o)+(m)(p)+(n)(o)+(n)(p)",
+        explanation="Apply distributive property"
+    ))
+    steps.append(Step(
+        before="(m)(o)+(m)(p)+(n)(o)+(n)(p)",
+        after=substituted,
+        explanation="Substitute actual values"
+    ))
+    steps.append(Step(
+        before=substituted,
+        after=str(expanded),
+        explanation="Combine like terms"
+    ))
 
     return expanded
+
