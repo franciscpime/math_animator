@@ -47,7 +47,7 @@ def latex_to_sympy(expr: str) -> str:
 
 
 def fix_implicit_mul(expr: str):
-    # 10(3/4) → 10*(3/4)
+    # 10(3/4) >> 10*(3/4)
     return re.sub(r'(\d)\(', r'\1*(', expr)
 
 
