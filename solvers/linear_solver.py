@@ -80,7 +80,7 @@ def common_divisor_of_constants(terms):
 # FIX: stepwise_string_eval — walk the unevaluated AST manually.
 #
 # O problema antigo: evaluate=False NÃO impede o SymPy de fazer constant
-# folding em expressões puramente numéricas (ex: "2*3+1" → 7 imediatamente).
+# folding em expressões puramente numéricas (ex: "2*3+1" >> 7 imediatamente).
 # Portanto preorder_traversal não encontrava Mul/Add nenhum para reduzir,
 # e a animação saltava directamente da expressão substituída para a igualdade.
 #
@@ -104,8 +104,8 @@ def _collect_mul_add_steps(sym):
     """
     Percorre o AST unevaluated de sym e devolve uma lista de pares
     (before_sym, after_sym), um por cada redução aritmética elementar:
-      - 1.ª passagem: todos os Mul cujos args são números → produto
-      - 2.ª passagem: todos os Add cujos args são números  → soma
+      - 1.ª passagem: todos os Mul cujos args são números >> produto
+      - 2.ª passagem: todos os Add cujos args são números  >> soma
     Post-order: sub-expressões internas são reduzidas antes das externas.
     UnevaluatedExpr é unwrapped antes de processar para que is_number
     funcione correctamente (UnevaluatedExpr(3).is_number é True mas
@@ -273,7 +273,7 @@ def solve_linear(equation: str):
     new_eq = build_equation(variable_terms, constant_terms)
 
     # Mostrar a explicação ANTES da transição — o renderer executa
-    # sempre transição→explicação, por isso a explicação tem de vir
+    # sempre transição>>explicação, por isso a explicação tem de vir
     # num Step próprio antes da mudança visual
     steps.append(
         Step(
@@ -326,18 +326,10 @@ def solve_linear(equation: str):
     const_steps = combine_terms_stepwise(constant_terms)
 
     for new_consts in const_steps:
-        divisor = common_divisor_of_constants(current_consts)
-
-        # FIX 2: mostrar a explicação ANTES da transição, num Step separado
-        if divisor != 1:
-            steps.append(
-                Step(
-                    before=build_equation(current_vars, current_consts),
-                    after=build_equation(current_vars, current_consts),
-                    explanation=f"Dividir ambos os lados por {sp.latex(divisor)}"
-                )
-            )
-
+        # Mostrar apenas a transição — sem mensagem de divisão aqui,
+        # pois estamos apenas a somar constantes (ex: 8-20 >> -12),
+        # não a dividir. A mensagem de divisão fica reservada para o
+        # CASO 2 onde se divide ambos os lados pelo coeficiente de x.
         steps.append(
             Step(
                 before=build_equation(current_vars, current_consts),
@@ -372,10 +364,24 @@ def solve_linear(equation: str):
 
         result = [sp.latex(sym, order='none')]
         current = sym
+        _frac_steps = []  # passos intermédios de int×Rational
 
         def _step_one_mul(expr):
-            """Encontra e reduz o primeiro Mul numérico, devolve (expr_nova, before, after)."""
+            """Encontra e reduz o primeiro Mul numérico, devolve (expr_nova, before, after).
+            Caso especial: Mul(inteiro, Rational) gera passo intermédio em _frac_steps:
+              10*(-3/7) -> frac{10*(-3)}{7} -> -30/7
+            """
             if isinstance(expr, sp.Mul) and all(a.is_number for a in expr.args):
+                inteiros  = [a for a in expr.args if isinstance(a, sp.Integer)]
+                racionais = [a for a in expr.args if isinstance(a, sp.Rational) and a.q != 1]
+                if len(expr.args) == 2 and inteiros and racionais:
+                    inteiro  = inteiros[0]
+                    racional = racionais[0]
+                    num_expr = sp.Mul(inteiro, sp.Integer(racional.p), evaluate=False)
+                    intermed = r'\frac{' + sp.latex(num_expr) + r'}{' + str(racional.q) + r'}'
+                    resultado = sp.Rational(int(inteiro) * racional.p, racional.q)
+                    _frac_steps.append((sp.latex(expr, order='none'), intermed, sp.latex(resultado)))
+                    return resultado, expr, resultado
                 return sp.Mul(*expr.args), expr, sp.Mul(*expr.args)
             for i, a in enumerate(expr.args):
                 result_inner = _step_one_mul(a)
@@ -399,29 +405,69 @@ def solve_linear(equation: str):
                     return expr.func(*new_args, evaluate=False), b, af
             return None
 
-        # Reduzir Muls um a um — substituir o sub-nó na string LaTeX anterior
-        # para preservar a ordem visual original dos termos
+        def _fix_plus_minus(s):
+            """Corrigir sinais duplos após substituição de frações.
+            '+ -' -> '-'  (positivo + negativo = negativo)
+            '- -' -> '+'  (negativo + negativo = positivo)
+            """
+            import re as _re
+            s = _re.sub(r'-\s*-\s*', '+ ', s)   # -- -> +
+            s = _re.sub(r'\+\s*-\s*', '- ', s)  # +- -> -
+            return s
+
+        # Reduzir Muls um a um — para int×Rational usar os passos de _frac_steps
         while True:
+            _frac_steps.clear()
             r = _step_one_mul(current)
             if r is None:
                 break
             new_expr, sub_antes, sub_depois = r
-            latex_antes  = sp.latex(sub_antes,  order='none')
-            latex_depois = sp.latex(sub_depois, order='none')
-            nova_str = result[-1].replace(latex_antes, latex_depois, 1)
+            if _frac_steps:
+                orig_l, intermed_l, final_l = _frac_steps[0]
+                s1 = _fix_plus_minus(result[-1].replace(orig_l, intermed_l, 1))
+                if s1 != result[-1]:
+                    result.append(s1)
+                s2 = _fix_plus_minus(s1.replace(intermed_l, final_l, 1))
+                if s2 != s1:
+                    result.append(s2)
+            else:
+                latex_antes  = sp.latex(sub_antes,  order='none')
+                latex_depois = sp.latex(sub_depois, order='none')
+                nova_str = _fix_plus_minus(result[-1].replace(latex_antes, latex_depois, 1))
+                if nova_str != result[-1]:
+                    result.append(nova_str)
             current = new_expr
-            if nova_str != result[-1]:
-                result.append(nova_str)
 
-        # Reduzir Adds um a um — mesmo processo
+        # Reduzir Adds um a um
+        # Caso especial: Add(inteiro, Rational não inteiro) >> passo MMC intermédio
         while True:
             r = _step_one_add(current)
             if r is None:
                 break
             new_expr, sub_antes, sub_depois = r
+            # Verificar se o Add tem inteiro + racional: gerar passo MMC
+            if isinstance(sub_antes, sp.Add):
+                inteiros_add  = [a for a in sub_antes.args if isinstance(a, sp.Integer)]
+                racionais_add = [a for a in sub_antes.args
+                                 if isinstance(a, sp.Rational) and not isinstance(a, sp.Integer) and a.q != 1]
+                if inteiros_add and racionais_add:
+                    den = racionais_add[0].q
+                    inteiro_val = int(inteiros_add[0])
+                    # Construir frac{n*den}{den} sem simplificar (sp.Rational simplificaria)
+                    frac_str = r'\frac{' + str(inteiro_val * den) + r'}{' + str(den) + r'}'
+                    latex_inteiro = sp.latex(sp.Integer(inteiro_val))
+                    # Substituir apenas o inteiro isolado (não parte de outro número)
+                    import re as _re
+                    intermed_str = _re.sub(
+                        r'(?<![0-9])' + _re.escape(latex_inteiro) + r'(?![0-9])',
+                        lambda m: frac_str, result[-1], count=1
+                    )
+                    intermed_str = _fix_plus_minus(intermed_str)
+                    if intermed_str != result[-1]:
+                        result.append(intermed_str)
             latex_antes  = sp.latex(sub_antes,  order='none')
             latex_depois = sp.latex(sub_depois, order='none')
-            nova_str = result[-1].replace(latex_antes, latex_depois, 1)
+            nova_str = _fix_plus_minus(result[-1].replace(latex_antes, latex_depois, 1))
             current = new_expr
             if nova_str != result[-1]:
                 result.append(nova_str)
@@ -449,14 +495,6 @@ def solve_linear(equation: str):
         # usando sp.printing.latex com order='none' para não reordenar
         equation_latex = f"{sp.latex(left_sym, order='none')} = {sp.latex(right_sym, order='none')}"
 
-        # Forçar transição para a equação original antes das explicações.
-        # Sem isto a explicação aparece sobre o ecrã anterior (ex: x=1/6).
-        steps.append(
-            Step(
-                before="",
-                after=equation_latex,
-            )
-        )
         steps.append(
             Step(
                 before=equation_latex,
@@ -515,9 +553,13 @@ def solve_linear(equation: str):
             steps=steps,
         )
 
-        # Verificação final — substituir \cdot por * para sympify conseguir parsear
-        left_final  = sp.sympify(cur_left.replace(r'\cdot', '*'), evaluate=True)
-        right_final = sp.sympify(cur_right.replace(r'\cdot', '*'), evaluate=True)
+        # Verificação final — usar final_value directamente em vez de parsear
+        # a string LaTeX de cur_left/cur_right, que pode conter \frac, \cdot, etc.
+        # que o sp.sympify não consegue parsear.
+        left_orig  = sp.sympify(normalize_expression(left_str.strip()), evaluate=False)
+        right_orig = sp.sympify(normalize_expression(right_str.strip()), evaluate=False)
+        left_final  = left_orig.subs(x, final_value)
+        right_final = right_orig.subs(x, final_value)
 
         is_true = sp.simplify(left_final - right_final) == 0
 
@@ -544,12 +586,12 @@ def solve_linear(equation: str):
         final_latex = sp.latex(final_value)
         _check_solution(final_value, final_latex, equation, steps)
 
-    # CASO 2: precisa dividir (ex: 30x=5 → 6x=1 → x=1/6)
+    # CASO 2: precisa dividir (ex: 30x=5 >> 6x=1 >> x=1/6)
     else:
         solution = sp.Rational(const, coef)
 
         # Calcular o MDC entre constante e coeficiente para simplificar gradualmente.
-        # Ex: 30x=5 — MDC(5,30)=5 → dividir por 5 → 6x=1 → depois dividir por 6
+        # Ex: 30x=5 — MDC(5,30)=5 >> dividir por 5 >> 6x=1 >> depois dividir por 6
         divisor_intermedio = safe_gcd(abs(const), abs(coef))
 
         if divisor_intermedio > 1 and divisor_intermedio != abs(coef):
@@ -595,6 +637,4 @@ def solve_linear(equation: str):
         _check_solution(final_value, final_latex, equation, steps)
 
     return steps
-
-
 

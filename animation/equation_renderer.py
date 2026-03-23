@@ -38,14 +38,21 @@ class EquationRenderer:
             if step.explanation:
                 explanation_text = self._format_explanation(step.explanation)
 
-                # "Vamos verificar!" aparece sozinho no centro do ecrã
                 if step.explanation == "Vamos verificar!":
+                    # Fazer ReplacementTransform para a equação original (after)
+                    # antes de mostrar o texto — assim não há flash abrupto
+                    eq_tex = MathTex(after).scale(1.4)
+                    eq_tex.move_to(self.tex)
+                    self.scene.play(ReplacementTransform(self.tex, eq_tex))
+                    self.tex = eq_tex
+                    self.scene.wait(0.5)
+                    # Fazer FadeOut da equação e mostrar só o texto centrado
                     self.scene.play(FadeOut(self.tex))
                     verificar = Tex(explanation_text).scale(1.2)
                     self.scene.play(Write(verificar))
                     self.scene.wait(1.5)
                     self.scene.play(FadeOut(verificar))
-                    # Repor a equação original no ecrã
+                    # Repor a equação original
                     self.scene.play(FadeIn(self.tex))
                     self.scene.wait(0.5)
                 else:
@@ -55,7 +62,3 @@ class EquationRenderer:
                     self.scene.wait(1)
                     self.scene.play(FadeOut(explanation))
                     self.scene.wait(1)
-
-
-
-                    

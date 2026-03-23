@@ -63,6 +63,9 @@ class AnimationController:
             is_factorized=is_factorized,
             m=m, n=n, o=o, p=p
         )
- 
+
+        for i, step in enumerate(steps):
+            print(f"Step {i}: before={repr(step.before)} | after={repr(step.after)} | explanation={repr(step.explanation)}")
+        
         self.renderer.animate(steps)
 
