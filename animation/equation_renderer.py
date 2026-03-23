@@ -1,58 +1,61 @@
 import sympy as sp
 from manim import *
 from utils.latex_formatter import to_latex
-# FIX E: removido import morto de expand_multiplications (nunca era usado)
 import re
- 
- 
+
+
 class EquationRenderer:
- 
     def __init__(self, scene: Scene):
         self.scene = scene
         self.tex = None
         self.explanation_tex = None
- 
+
+    def _format_explanation(self, text: str) -> str:
+        """Envolve comandos LaTeX em $...$ para que o Tex() os compile correctamente."""
+        return re.sub(
+            r'(\\[a-zA-Z]+(?:\{[^}]*\})*(?:\{[^}]*\})?)',
+            r'$\1$',
+            text
+        )
+
     def animate(self, steps):
- 
         first = to_latex(steps[0].before)
- 
         self.tex = MathTex(first).scale(1.4)
         self.scene.play(Write(self.tex))
- 
+
         for step in steps:
- 
-            before = step.before
-            after = step.after
- 
-            # FIX F: usa sp.sympify em vez de int() para suportar decimais e frações
-            expanded = re.sub(
-                r'(\d+(?:\.\d+)?)\((\-?\d+(?:[./]\d+)?)\)',
-                lambda m: str(sp.sympify(m.group(1)) * sp.sympify(m.group(2))),
-                before
-            )
- 
-            if expanded != before:
-                mid_tex = MathTex(to_latex(expanded)).scale(1.4)
-                mid_tex.move_to(self.tex)
- 
-                self.scene.play(ReplacementTransform(self.tex, mid_tex))
-                self.tex = mid_tex
+            before = to_latex(step.before)
+            after  = to_latex(step.after)
+
+            # Só anima a transição se houver mudança visível
+            if before != after:
+                new_tex = MathTex(after).scale(1.4)
+                new_tex.move_to(self.tex)
+                self.scene.play(ReplacementTransform(self.tex, new_tex))
+                self.tex = new_tex
                 self.scene.wait(1)
- 
-            # passo normal
-            new_tex = MathTex(to_latex(after)).scale(1.4)
-            new_tex.move_to(self.tex)
- 
-            self.scene.play(ReplacementTransform(self.tex, new_tex))
-            self.tex = new_tex
- 
+
             if step.explanation:
-                explanation = Tex(step.explanation).scale(0.9)
-                explanation.next_to(self.tex, DOWN)
- 
-                self.scene.play(Write(explanation))
-                self.scene.wait(1)
- 
-                self.scene.play(FadeOut(explanation))
- 
-            self.scene.wait(1)
+                explanation_text = self._format_explanation(step.explanation)
+
+                # "Vamos verificar!" aparece sozinho no centro do ecrã
+                if step.explanation == "Vamos verificar!":
+                    self.scene.play(FadeOut(self.tex))
+                    verificar = Tex(explanation_text).scale(1.2)
+                    self.scene.play(Write(verificar))
+                    self.scene.wait(1.5)
+                    self.scene.play(FadeOut(verificar))
+                    # Repor a equação original no ecrã
+                    self.scene.play(FadeIn(self.tex))
+                    self.scene.wait(0.5)
+                else:
+                    explanation = Tex(explanation_text).scale(0.9)
+                    explanation.next_to(self.tex, DOWN)
+                    self.scene.play(Write(explanation))
+                    self.scene.wait(1)
+                    self.scene.play(FadeOut(explanation))
+                    self.scene.wait(1)
+
+
+
+                    
