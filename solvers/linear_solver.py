@@ -374,8 +374,43 @@ def solve_linear(equation: str):
         result = [(subst_str, None)]
 
         if not (isinstance(final_value, sp.Rational) and final_value.q != 1):
+            # Valor inteiro — mostrar multiplicações e somas passo a passo
+            cur = subst_str
+            val_esc_int = _re.escape(sp.latex(final_value))
+            pattern_int = r'(-?\s*\d+)\s*\(' + val_esc_int + r'\)'
+            # Passo 1: resolver cada coef*(inteiro)
+            while True:
+                m = _re.search(pattern_int, cur)
+                if not m: break
+                coef = int(m.group(1).replace(' ', ''))
+                produto = coef * int(final_value)
+                # Se o sinal '-' estava na string e o resultado é positivo,
+                # adicionar '+' para não ficar '10 20' sem operador
+                prod_str = str(produto)
+                before_m = cur[:m.start()]
+                after_m  = cur[m.end():]
+                # Adicionar operador explícito se necessário
+                if before_m.rstrip() and before_m.rstrip()[-1].isdigit():
+                    prod_str = ('+ ' if produto >= 0 else '- ') + str(abs(produto))
+                s1 = _fix_pm(before_m + prod_str + after_m)
+                if s1 == cur: break
+                result.append((s1, None)); cur = s1
+            # Passo 2: somar termos numéricos restantes
             final_str = sp.latex(sp.simplify(sym_evaled))
-            if final_str != subst_str:
+            # Tentar somar par a par usando Add simples
+            sum_pattern = r'(-?\d+)\s*([+-])\s*(\d+)'
+            for _ in range(10):
+                m = _re.search(sum_pattern, cur)
+                if not m: break
+                a = int(m.group(1))
+                op = m.group(2)
+                b = int(m.group(3))
+                soma = a + b if op == '+' else a - b
+                novo = _fix_pm(cur[:m.start()] + str(soma) + cur[m.end():])
+                if novo == cur: break
+                result.append((novo, None)); cur = novo
+                if cur == final_str: break
+            if cur != final_str:
                 result.append((final_str, None))
             return result
 
@@ -397,9 +432,21 @@ def solve_linear(equation: str):
             frac_i = r'\frac{' + c_str + r' \cdot ' + val_num_str + r'}{' + str(val_den) + r'}'
             s1 = _fix_pm(_add_ops(cur[:m.start()] + frac_i + cur[m.end():]))
             if s1 != cur: result.append((s1, None)); cur = s1
-            frac_f = sp.latex(sp.Rational(produto, val_den))
-            s2 = _fix_pm(_add_ops(cur.replace(frac_i, frac_f, 1)))
+            # Fração não simplificada: mostrar produto/val_den antes de simplificar
+            frac_unsimplified = r'\frac{' + str(produto) + r'}{' + str(val_den) + r'}'
+            frac_simplified    = sp.latex(sp.Rational(produto, val_den))
+            # Passo 2a: substituir frac_i por frac_unsimplified (resultado da mult)
+            s2_raw = cur.replace(frac_i, frac_unsimplified, 1)
+            s2 = _fix_pm(_add_ops(s2_raw))
+            s2 = _re.sub(r'(\d)\s+(\d)', r'\1 + \2', s2)
+            s2 = _fix_pm(s2)
             if s2 != cur: result.append((s2, None)); cur = s2
+            # Passo 2b: simplificar a fração se o resultado for diferente
+            if frac_simplified != frac_unsimplified:
+                s3 = _fix_pm(_add_ops(cur.replace(frac_unsimplified, frac_simplified, 1)))
+                s3 = _re.sub(r'(\d)\s+(\d)', r'\1 + \2', s3)
+                s3 = _fix_pm(s3)
+                if s3 != cur: result.append((s3, None)); cur = s3
 
         final_val = sp.simplify(sym_evaled)
         final_str = sp.latex(final_val)
@@ -424,31 +471,79 @@ def solve_linear(equation: str):
                 else: i += 1
             return found
 
-        # Passo 2: inteiros -> frac com denominador comum (FIX 4,5,6,7)
-        if find_isolated_ints(cur):
-            result.append((cur, f'Reduzir ao mesmo denominador ({val_den})'))
+        # Passo 2: inteiros -> frac com denominador comum
+        # Calcular o MMC dos denominadores presentes na string actual
+        has_frac = r'\frac' in cur
+        if has_frac and find_isolated_ints(cur):
+            # Extrair todos os denominadores presentes
+            dens_presentes = [int(d) for d in _re.findall(r'\\frac\{[^}]+\}\{(\d+)\}', cur)]
+            if dens_presentes:
+                from math import lcm as _lcm
+                from functools import reduce as _reduce
+                den_comum = _reduce(_lcm, dens_presentes)
+            else:
+                den_comum = val_den
+            result.append((cur, f'Reduzir ao mesmo denominador ({den_comum})'))
             for _ in range(30):
                 iso = find_isolated_ints(cur)
                 if not iso: break
                 start, end, n = iso[0]
-                frac = r'\frac{' + str(n * val_den) + r'}{' + str(val_den) + r'}'
+                frac = r'\frac{' + str(n * den_comum) + r'}{' + str(den_comum) + r'}'
                 novo = _fix_pm(_add_ops(cur[:start] + frac + cur[end:]))
                 if novo == cur: break
                 result.append((novo, None)); cur = novo
                 if cur == final_str: break
 
-        # Passo 3: somar fracoes par a par (FIX 5,7)
+        # Passo 3: somar fracoes par a par
+        # Se denominadores forem diferentes, converter primeiro para denominador comum
         fp = r'(\\frac\{(-?\d+)\}\{(\d+)\})\s*([+-])\s*(\\frac\{(-?\d+)\}\{(\d+)\})'
+        from math import lcm as _lcm2
         for _ in range(30):
             m = _re.search(fp, cur)
             if not m: break
             na, da = int(m.group(2)), int(m.group(3))
             op = m.group(4)
             nb, db = int(m.group(6)), int(m.group(7))
-            if da != db: break
+            # Verificar se há '-' antes do primeiro rac (sinal externo)
+            prefix = cur[:m.start()].rstrip()
+            if prefix.endswith('-'):
+                na = -abs(na)
+                # Remover o '-' do prefix para não ficar duplicado
+                cur = cur[:len(prefix)-1] + cur[len(prefix):]
+                m = _re.search(fp, cur)  # re-search após remoção
+                if not m: break
+                na, da = int(m.group(2)), int(m.group(3))
+                na = -abs(na)
+                op = m.group(4)
+                nb, db = int(m.group(6)), int(m.group(7))
+            if da != db:
+                # Denominadores diferentes: converter para denominador comum
+                dc = _lcm2(da, db)
+                na_new = na * (dc // da)
+                nb_new = nb * (dc // db)
+                frac_a_new = r'\frac{' + str(na_new) + r'}{' + str(dc) + r'}'
+                frac_b_new = r'\frac{' + str(nb_new) + r'}{' + str(dc) + r'}'
+                novo = _fix_pm(_add_ops(
+                    cur[:m.start()] + frac_a_new + ' ' + op + ' ' + frac_b_new + cur[m.end():]
+                ))
+                if novo == cur: break
+                result.append((novo, None)); cur = novo
+                continue
             soma_n = na + (nb if op == '+' else -nb)
+            # Passo intermédio: juntar numeradores antes de calcular
+            # ex: rac{12}{3} - rac{23}{3} -> rac{12 - 23}{3} -> rac{-11}{3}
+            nb_signed = nb if op == '+' else -nb
+            if op == '+':
+                num_expr_str = str(na) + ' + ' + str(nb)
+            else:
+                num_expr_str = str(na) + ' - ' + str(nb)
+            frac_joined = r'\frac{' + num_expr_str + r'}{' + str(da) + r'}'
+            novo_joined = _fix_pm(_add_ops((cur[:m.start()] + frac_joined + cur[m.end():]).strip()))
+            if novo_joined != cur:
+                result.append((novo_joined, None)); cur = novo_joined
+            # Agora calcular o resultado
             frac_soma = '0' if soma_n == 0 else sp.latex(sp.Rational(soma_n, da))
-            novo = _fix_pm(_add_ops(cur[:m.start()] + frac_soma + cur[m.end():]))
+            novo = _fix_pm(_add_ops((cur.replace(frac_joined, frac_soma, 1)).strip()))
             if novo == cur: break
             result.append((novo, None)); cur = novo
             if cur == final_str: break
@@ -595,21 +690,31 @@ def solve_linear(equation: str):
         final_latex = sp.latex(final_value)
         _check_solution(final_value, final_latex, equation, steps)
 
-    # CASO 2: precisa dividir (ex: 30x=5 → 6x=1 → x=1/6)
+    # CASO 2: precisa dividir
     else:
         solution = sp.Rational(const, coef)
 
-        # Calcular o MDC entre constante e coeficiente para simplificar gradualmente.
-        # Ex: 30x=5 — MDC(5,30)=5 → dividir por 5 → 6x=1 → depois dividir por 6
+        # Verificar se a solução simplifica para um inteiro (ex: -10/4 = -5/2)
+        # Só mostrar passo intermédio se o coeficiente simplificado ainda != 1
+        # E se a solução for uma fracção irredutível com denominador > 1
         divisor_intermedio = safe_gcd(abs(const), abs(coef))
 
-        if divisor_intermedio > 1 and divisor_intermedio != abs(coef):
-            # Passo intermédio: simplificar pelo MDC primeiro
-            coef_simplificado  = sp.Rational(coef,  divisor_intermedio)
-            const_simplificado = sp.Rational(const, divisor_intermedio)
-            left_intermedio  = coef_simplificado * x
-            right_intermedio = const_simplificado
+        # Só mostrar passo intermédio quando faz sentido pedagógico:
+        # o coeficiente simplificado é inteiro > 1 e a constante simplificada
+        # também é inteira (ou seja, a divisão intermédia não cria frações)
+        coef_simpl  = sp.Rational(coef,  divisor_intermedio)
+        const_simpl = sp.Rational(const, divisor_intermedio)
+        mostrar_intermedio = (
+            divisor_intermedio > 1
+            and divisor_intermedio != abs(coef)
+            and coef_simpl.q == 1   # coef simplificado é inteiro
+            and const_simpl.q == 1  # constante simplificada é inteira
+            and coef_simpl != 1     # ainda precisa de mais um passo
+        )
 
+        if mostrar_intermedio:
+            left_intermedio  = coef_simpl * x
+            right_intermedio = const_simpl
             steps.append(Step(
                 before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
                 after=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
@@ -622,18 +727,19 @@ def solve_linear(equation: str):
             steps.append(Step(
                 before=f"{sp.latex(left_intermedio)} = {sp.latex(right_intermedio)}",
                 after=f"{sp.latex(left_intermedio)} = {sp.latex(right_intermedio)}",
-                explanation=f"Dividir ambos os lados por {sp.latex(coef_simplificado)}"
+                explanation=f"Dividir ambos os lados por {sp.latex(coef_simpl)}"
             ))
             steps.append(Step(
                 before=f"{sp.latex(left_intermedio)} = {sp.latex(right_intermedio)}",
                 after=f"x = {sp.latex(solution)}",
             ))
         else:
-            # Divisão directa sem passo intermédio
+            # Divisão directa — mostrar coeficiente simplificado se possível
+            divisor_display = divisor_intermedio if divisor_intermedio == abs(coef) else abs(coef)
             steps.append(Step(
                 before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
                 after=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
-                explanation=f"Dividir ambos os lados por {sp.latex(coef)}"
+                explanation=f"Dividir ambos os lados por {sp.latex(sp.Integer(divisor_display))}"
             ))
             steps.append(Step(
                 before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
@@ -646,5 +752,4 @@ def solve_linear(equation: str):
         _check_solution(final_value, final_latex, equation, steps)
 
     return steps
-
 
