@@ -80,7 +80,7 @@ def common_divisor_of_constants(terms):
 # FIX: stepwise_string_eval — walk the unevaluated AST manually.
 #
 # O problema antigo: evaluate=False NÃO impede o SymPy de fazer constant
-# folding em expressões puramente numéricas (ex: "2*3+1" >> 7 imediatamente).
+# folding em expressões puramente numéricas (ex: "2*3+1" → 7 imediatamente).
 # Portanto preorder_traversal não encontrava Mul/Add nenhum para reduzir,
 # e a animação saltava directamente da expressão substituída para a igualdade.
 #
@@ -104,8 +104,8 @@ def _collect_mul_add_steps(sym):
     """
     Percorre o AST unevaluated de sym e devolve uma lista de pares
     (before_sym, after_sym), um por cada redução aritmética elementar:
-      - 1.ª passagem: todos os Mul cujos args são números >> produto
-      - 2.ª passagem: todos os Add cujos args são números  >> soma
+      - 1.ª passagem: todos os Mul cujos args são números → produto
+      - 2.ª passagem: todos os Add cujos args são números  → soma
     Post-order: sub-expressões internas são reduzidas antes das externas.
     UnevaluatedExpr é unwrapped antes de processar para que is_number
     funcione correctamente (UnevaluatedExpr(3).is_number é True mas
@@ -218,25 +218,30 @@ def stepwise_string_eval(expr_str: str):
 
 def merge_side_steps(left_steps, right_steps, initial_left, initial_right, steps):
     """
-    Intercala left_steps e right_steps em objectos Step adicionados a `steps`.
-    Só emite um Step quando before != after (transição visível).
+    Mostra primeiro todos os passos do lado esquerdo (mantendo o direito fixo),
+    depois todos os passos do lado direito (mantendo o esquerdo fixo).
+    Assim cada Step corresponde a exactamente uma operação num único lado,
+    evitando que operações de lados diferentes apareçam na mesma transição.
+    Só emite Steps quando before != after.
     Devolve (cur_left, cur_right) — as strings LaTeX finais de cada lado.
     """
-    max_len = max(len(left_steps), len(right_steps))
-    left_padded  = left_steps  + [left_steps[-1]]  * (max_len - len(left_steps))
-    right_padded = right_steps + [right_steps[-1]] * (max_len - len(right_steps))
-
     cur_left  = initial_left
     cur_right = initial_right
 
-    for l_after, r_after in zip(left_padded, right_padded):
+    # Primeiro: todos os passos do lado esquerdo
+    for l_after in left_steps:
         before = f"{cur_left} = {cur_right}"
-        after  = f"{l_after} = {r_after}"
-
+        after  = f"{l_after} = {cur_right}"
         if before != after:
             steps.append(Step(before=before, after=after))
+        cur_left = l_after
 
-        cur_left  = l_after
+    # Depois: todos os passos do lado direito
+    for r_after in right_steps:
+        before = f"{cur_left} = {cur_right}"
+        after  = f"{cur_left} = {r_after}"
+        if before != after:
+            steps.append(Step(before=before, after=after))
         cur_right = r_after
 
     return cur_left, cur_right
@@ -273,7 +278,7 @@ def solve_linear(equation: str):
     new_eq = build_equation(variable_terms, constant_terms)
 
     # Mostrar a explicação ANTES da transição — o renderer executa
-    # sempre transição>>explicação, por isso a explicação tem de vir
+    # sempre transição→explicação, por isso a explicação tem de vir
     # num Step próprio antes da mudança visual
     steps.append(
         Step(
@@ -327,7 +332,7 @@ def solve_linear(equation: str):
 
     for new_consts in const_steps:
         # Mostrar apenas a transição — sem mensagem de divisão aqui,
-        # pois estamos apenas a somar constantes (ex: 8-20 >> -12),
+        # pois estamos apenas a somar constantes (ex: 8-20 → -12),
         # não a dividir. A mensagem de divisão fica reservada para o
         # CASO 2 onde se divide ambos os lados pelo coeficiente de x.
         steps.append(
@@ -439,7 +444,7 @@ def solve_linear(equation: str):
             current = new_expr
 
         # Reduzir Adds um a um
-        # Caso especial: Add(inteiro, Rational não inteiro) >> passo MMC intermédio
+        # Caso especial: Add(inteiro, Rational não inteiro) → passo MMC intermédio
         while True:
             r = _step_one_add(current)
             if r is None:
@@ -453,7 +458,7 @@ def solve_linear(equation: str):
                 if inteiros_add and racionais_add:
                     den = racionais_add[0].q
                     inteiro_val = int(inteiros_add[0])
-                    # Construir frac{n*den}{den} sem simplificar (sp.Rational simplificaria)
+                    # Construir rac{n*den}{den} sem simplificar (sp.Rational simplificaria)
                     frac_str = r'\frac{' + str(inteiro_val * den) + r'}{' + str(den) + r'}'
                     latex_inteiro = sp.latex(sp.Integer(inteiro_val))
                     # Substituir apenas o inteiro isolado (não parte de outro número)
@@ -586,12 +591,12 @@ def solve_linear(equation: str):
         final_latex = sp.latex(final_value)
         _check_solution(final_value, final_latex, equation, steps)
 
-    # CASO 2: precisa dividir (ex: 30x=5 >> 6x=1 >> x=1/6)
+    # CASO 2: precisa dividir (ex: 30x=5 → 6x=1 → x=1/6)
     else:
         solution = sp.Rational(const, coef)
 
         # Calcular o MDC entre constante e coeficiente para simplificar gradualmente.
-        # Ex: 30x=5 — MDC(5,30)=5 >> dividir por 5 >> 6x=1 >> depois dividir por 6
+        # Ex: 30x=5 — MDC(5,30)=5 → dividir por 5 → 6x=1 → depois dividir por 6
         divisor_intermedio = safe_gcd(abs(const), abs(coef))
 
         if divisor_intermedio > 1 and divisor_intermedio != abs(coef):
@@ -637,4 +642,6 @@ def solve_linear(equation: str):
         _check_solution(final_value, final_latex, equation, steps)
 
     return steps
+
+
 
