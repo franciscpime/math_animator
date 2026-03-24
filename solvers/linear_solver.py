@@ -354,140 +354,117 @@ def solve_linear(equation: str):
     def safe_gcd(a, b):
         return sp.gcd(sp.Rational(a), sp.Rational(b))
 
-    def _sympy_stepwise(sym):
+    def _sympy_stepwise(subst_str, sym_evaled, final_value):
         """
-        Recebe um objecto SymPy (unevaluated) e devolve lista de strings LaTeX,
-        uma por cada redução aritmética elementar.
-        A cada passo substitui o sub-nó reduzido na expressão completa (xreplace)
-        para que o LaTeX mostre sempre a expressão inteira e não só o sub-nó.
+        Gera lista de tuplos (latex_str, explicacao) com cada passo aritmético.
+        explicacao=None para transições, string para mensagens pedagógicas.
         """
-        sym = _unwrap(sym)
+        import re as _re
 
-        # Se já é um número simples, nada a mostrar
-        if sym.is_number and not isinstance(sym, (sp.Add, sp.Mul)):
-            return [sp.latex(sym)]
-
-        result = [sp.latex(sym, order='none')]
-        current = sym
-        _frac_steps = []  # passos intermédios de int×Rational
-
-        def _step_one_mul(expr):
-            """Encontra e reduz o primeiro Mul numérico, devolve (expr_nova, before, after).
-            Caso especial: Mul(inteiro, Rational) gera passo intermédio em _frac_steps:
-              10*(-3/7) -> frac{10*(-3)}{7} -> -30/7
-            """
-            if isinstance(expr, sp.Mul) and all(a.is_number for a in expr.args):
-                inteiros  = [a for a in expr.args if isinstance(a, sp.Integer)]
-                racionais = [a for a in expr.args if isinstance(a, sp.Rational) and a.q != 1]
-                if len(expr.args) == 2 and inteiros and racionais:
-                    inteiro  = inteiros[0]
-                    racional = racionais[0]
-                    num_expr = sp.Mul(inteiro, sp.Integer(racional.p), evaluate=False)
-                    intermed = r'\frac{' + sp.latex(num_expr) + r'}{' + str(racional.q) + r'}'
-                    resultado = sp.Rational(int(inteiro) * racional.p, racional.q)
-                    _frac_steps.append((sp.latex(expr, order='none'), intermed, sp.latex(resultado)))
-                    return resultado, expr, resultado
-                return sp.Mul(*expr.args), expr, sp.Mul(*expr.args)
-            for i, a in enumerate(expr.args):
-                result_inner = _step_one_mul(a)
-                if result_inner is not None:
-                    reduced, b, af = result_inner
-                    new_args = list(expr.args)
-                    new_args[i] = reduced
-                    return expr.func(*new_args, evaluate=False), b, af
-            return None
-
-        def _step_one_add(expr):
-            """Encontra e reduz o primeiro Add numérico, devolve (expr_nova, before, after)."""
-            if isinstance(expr, sp.Add) and all(a.is_number for a in expr.args):
-                return sp.Add(*expr.args), expr, sp.Add(*expr.args)
-            for i, a in enumerate(expr.args):
-                result_inner = _step_one_add(a)
-                if result_inner is not None:
-                    reduced, b, af = result_inner
-                    new_args = list(expr.args)
-                    new_args[i] = reduced
-                    return expr.func(*new_args, evaluate=False), b, af
-            return None
-
-        def _fix_plus_minus(s):
-            """Corrigir sinais duplos após substituição de frações.
-            '+ -' -> '-'  (positivo + negativo = negativo)
-            '- -' -> '+'  (negativo + negativo = positivo)
-            """
-            import re as _re
-            s = _re.sub(r'-\s*-\s*', '+ ', s)   # -- -> +
-            s = _re.sub(r'\+\s*-\s*', '- ', s)  # +- -> -
+        def _fix_pm(s):
+            s = _re.sub(r'-\s*-\s*', '+ ', s)
+            s = _re.sub(r'\+\s*-\s*', '- ', s)
             return s
 
-        # Reduzir Muls um a um — para int×Rational usar os passos de _frac_steps
+        def _add_ops(s):
+            s = _re.sub(r'(\d)\s*(\\frac)', r'\1 + \2', s)
+            s = _re.sub(r'(\})\s*(\\frac)', r'\1 + \2', s)
+            return s
+
+        result = [(subst_str, None)]
+
+        if not (isinstance(final_value, sp.Rational) and final_value.q != 1):
+            final_str = sp.latex(sp.simplify(sym_evaled))
+            if final_str != subst_str:
+                result.append((final_str, None))
+            return result
+
+        val_num = final_value.p
+        val_den = final_value.q
+        val_latex_s = sp.latex(final_value)
+        val_esc = _re.escape(val_latex_s)
+        val_num_str = '(' + str(val_num) + ')' if val_num < 0 else str(val_num)
+
+        # Passo 1: cada "coef (val)" -> frac{coef*num}{den} -> frac{resultado}{den}
+        pattern = r'(-?\s*\d+)\s*\(' + val_esc + r'\)'
+        cur = subst_str
         while True:
-            _frac_steps.clear()
-            r = _step_one_mul(current)
-            if r is None:
-                break
-            new_expr, sub_antes, sub_depois = r
-            if _frac_steps:
-                orig_l, intermed_l, final_l = _frac_steps[0]
-                s1 = _fix_plus_minus(result[-1].replace(orig_l, intermed_l, 1))
-                if s1 != result[-1]:
-                    result.append(s1)
-                s2 = _fix_plus_minus(s1.replace(intermed_l, final_l, 1))
-                if s2 != s1:
-                    result.append(s2)
-            else:
-                latex_antes  = sp.latex(sub_antes,  order='none')
-                latex_depois = sp.latex(sub_depois, order='none')
-                nova_str = _fix_plus_minus(result[-1].replace(latex_antes, latex_depois, 1))
-                if nova_str != result[-1]:
-                    result.append(nova_str)
-            current = new_expr
+            m = _re.search(pattern, cur)
+            if not m: break
+            coef = int(m.group(1).replace(' ', ''))
+            produto = coef * val_num
+            c_str = ('(' + str(coef) + ')') if coef < 0 else str(coef)
+            frac_i = r'\frac{' + c_str + r' \cdot ' + val_num_str + r'}{' + str(val_den) + r'}'
+            s1 = _fix_pm(_add_ops(cur[:m.start()] + frac_i + cur[m.end():]))
+            if s1 != cur: result.append((s1, None)); cur = s1
+            frac_f = sp.latex(sp.Rational(produto, val_den))
+            s2 = _fix_pm(_add_ops(cur.replace(frac_i, frac_f, 1)))
+            if s2 != cur: result.append((s2, None)); cur = s2
 
-        # Reduzir Adds um a um
-        # Caso especial: Add(inteiro, Rational não inteiro) → passo MMC intermédio
-        while True:
-            r = _step_one_add(current)
-            if r is None:
-                break
-            new_expr, sub_antes, sub_depois = r
-            # Verificar se o Add tem inteiro + racional: gerar passo MMC
-            if isinstance(sub_antes, sp.Add):
-                inteiros_add  = [a for a in sub_antes.args if isinstance(a, sp.Integer)]
-                racionais_add = [a for a in sub_antes.args
-                                 if isinstance(a, sp.Rational) and not isinstance(a, sp.Integer) and a.q != 1]
-                if inteiros_add and racionais_add:
-                    den = racionais_add[0].q
-                    inteiro_val = int(inteiros_add[0])
-                    # Construir rac{n*den}{den} sem simplificar (sp.Rational simplificaria)
-                    frac_str = r'\frac{' + str(inteiro_val * den) + r'}{' + str(den) + r'}'
-                    latex_inteiro = sp.latex(sp.Integer(inteiro_val))
-                    # Substituir apenas o inteiro isolado (não parte de outro número)
-                    import re as _re
-                    intermed_str = _re.sub(
-                        r'(?<![0-9])' + _re.escape(latex_inteiro) + r'(?![0-9])',
-                        lambda m: frac_str, result[-1], count=1
-                    )
-                    intermed_str = _fix_plus_minus(intermed_str)
-                    if intermed_str != result[-1]:
-                        result.append(intermed_str)
-            latex_antes  = sp.latex(sub_antes,  order='none')
-            latex_depois = sp.latex(sub_depois, order='none')
-            nova_str = _fix_plus_minus(result[-1].replace(latex_antes, latex_depois, 1))
-            current = new_expr
-            if nova_str != result[-1]:
-                result.append(nova_str)
+        final_val = sp.simplify(sym_evaled)
+        final_str = sp.latex(final_val)
 
-        # Garantir valor final simplificado
-        final_latex = sp.latex(sp.simplify(current), order='none')
-        if result[-1] != final_latex:
-            result.append(final_latex)
+        # Encontrar inteiros soltos fora de chaves
+        def find_isolated_ints(s):
+            found = []; depth = 0; i = 0
+            while i < len(s):
+                c = s[i]
+                if c == '{': depth += 1; i += 1; continue
+                elif c == '}': depth -= 1; i += 1; continue
+                if depth > 0: i += 1; continue
+                if c.isdigit():
+                    if i > 0 and (s[i-1].isdigit() or s[i-1] == '{'): i += 1; continue
+                    j = i
+                    while j < len(s) and s[j].isdigit(): j += 1
+                    if j < len(s) and s[j] in '/}': i = j; continue
+                    try: n = int(s[i:j])
+                    except: i += 1; continue
+                    if n != 0: found.append((i, j, n))
+                    i = j
+                else: i += 1
+            return found
 
-        # Deduplicar entradas consecutivas iguais
+        # Passo 2: inteiros -> frac com denominador comum (FIX 4,5,6,7)
+        if find_isolated_ints(cur):
+            result.append((cur, f'Reduzir ao mesmo denominador ({val_den})'))
+            for _ in range(30):
+                iso = find_isolated_ints(cur)
+                if not iso: break
+                start, end, n = iso[0]
+                frac = r'\frac{' + str(n * val_den) + r'}{' + str(val_den) + r'}'
+                novo = _fix_pm(_add_ops(cur[:start] + frac + cur[end:]))
+                if novo == cur: break
+                result.append((novo, None)); cur = novo
+                if cur == final_str: break
+
+        # Passo 3: somar fracoes par a par (FIX 5,7)
+        fp = r'(\\frac\{(-?\d+)\}\{(\d+)\})\s*([+-])\s*(\\frac\{(-?\d+)\}\{(\d+)\})'
+        for _ in range(30):
+            m = _re.search(fp, cur)
+            if not m: break
+            na, da = int(m.group(2)), int(m.group(3))
+            op = m.group(4)
+            nb, db = int(m.group(6)), int(m.group(7))
+            if da != db: break
+            soma_n = na + (nb if op == '+' else -nb)
+            frac_soma = '0' if soma_n == 0 else sp.latex(sp.Rational(soma_n, da))
+            novo = _fix_pm(_add_ops(cur[:m.start()] + frac_soma + cur[m.end():]))
+            if novo == cur: break
+            result.append((novo, None)); cur = novo
+            if cur == final_str: break
+
+        if cur != final_str:
+            result.append((final_str, None))
+
+        # Deduplicar mantendo mensagens
         deduped = [result[0]]
-        for s in result[1:]:
-            if s != deduped[-1]:
-                deduped.append(s)
+        for item in result[1:]:
+            s, e = item
+            ps = deduped[-1][0]
+            if s != ps or e is not None:
+                deduped.append(item)
         return deduped
+
 
     def _check_solution(final_value, final_latex, equation, steps):
         """Verificação da solução com passos intermédios completos."""
@@ -536,27 +513,54 @@ def solve_linear(equation: str):
             )
         )
 
-        # Para os passos aritméticos usamos o AST SymPy
-        left_evaled  = left_sym.xreplace({x: sp.UnevaluatedExpr(final_value)})
-        right_evaled = right_sym.xreplace({x: sp.UnevaluatedExpr(final_value)})
+        # Substituir x termo a termo para preservar Muls separados.
+        # left_sym.xreplace() combinaria -30x + 40x em 10x antes de substituir.
+        def _subst_terms(sym, val):
+            """Substitui x em cada termo de um Add individualmente,
+            reconstruindo sem avaliar para preservar cada Mul separado."""
+            if isinstance(sym, sp.Add):
+                new_terms = [t.xreplace({x: sp.UnevaluatedExpr(val)}) for t in sym.args]
+                return sp.Add(*new_terms, evaluate=False)
+            return sym.xreplace({x: sp.UnevaluatedExpr(val)})
 
-        left_steps  = _sympy_stepwise(left_evaled)
-        right_steps = _sympy_stepwise(right_evaled)
+        left_evaled  = _subst_terms(left_sym,  final_value)
+        right_evaled = _subst_terms(right_sym, final_value)
 
-        # Substituir o primeiro elemento pela string de ordem original
-        if left_steps:
-            left_steps[0] = left_subst_str
-        if right_steps:
-            right_steps[0] = right_subst_str
+          # Gerar passos — lista de (latex_str, explicacao_ou_None)
+        left_tuples  = _sympy_stepwise(left_subst_str,  left_evaled,  final_value)
+        right_tuples = _sympy_stepwise(right_subst_str, right_evaled, final_value)
 
-        # Intercalar os dois lados em Steps, sem emitir transições nulas
-        cur_left, cur_right = merge_side_steps(
-            left_steps,
-            right_steps,
-            initial_left=left_subst_str,
-            initial_right=right_subst_str,
-            steps=steps,
-        )
+        def _extract(tuples):
+            sl, ex = [], {}
+            for i, (s, e) in enumerate(tuples):
+                sl.append(s)
+                if e: ex[i] = e
+            return sl, ex
+
+        left_steps,  left_expls  = _extract(left_tuples)
+        right_steps, right_expls = _extract(right_tuples)
+
+        # Mostrar passos: primeiro lado esquerdo, depois lado direito
+        cur_left  = left_subst_str
+        cur_right = right_subst_str
+        for i, l_after in enumerate(left_steps):
+            expl = left_expls.get(i)
+            before = f'{cur_left} = {cur_right}'
+            if expl:
+                steps.append(Step(before=before, after=before, explanation=expl))
+            after = f'{l_after} = {cur_right}'
+            if before != after:
+                steps.append(Step(before=before, after=after))
+            cur_left = l_after
+        for i, r_after in enumerate(right_steps):
+            expl = right_expls.get(i)
+            before = f'{cur_left} = {cur_right}'
+            if expl:
+                steps.append(Step(before=before, after=before, explanation=expl))
+            after = f'{cur_left} = {r_after}'
+            if before != after:
+                steps.append(Step(before=before, after=after))
+            cur_right = r_after
 
         # Verificação final — usar final_value directamente em vez de parsear
         # a string LaTeX de cur_left/cur_right, que pode conter \frac, \cdot, etc.
@@ -642,6 +646,5 @@ def solve_linear(equation: str):
         _check_solution(final_value, final_latex, equation, steps)
 
     return steps
-
 
 
