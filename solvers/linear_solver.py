@@ -12,31 +12,150 @@ from utils.equation_builder import build_equation, render_terms
 x = sp.symbols("x")
 
 
-# FIX 1 + FIX 2: Combina termos passo a passo garantindo que só combina termos do mesmo tipo
+# ─────────────────────────────────────────────────────────────────────────────
+# CORREÇÃO 1 — combine_terms_stepwise
+#
+# Antes: combinava directamente coef1·x + coef2·x sem mostrar o passo de
+#        igualação de denominadores quando os coeficientes são frações.
+#
+# Agora: quando ambos os coeficientes são racionais com denominadores
+#        diferentes, emite passos intermédios:
+#          1) converter cada coef para o denominador comum → (a/d)x ± (b/d)x
+#          2) juntar numeradores             → ((a±b)/d)x  [ainda não avaliado]
+#          3) simplificar a fração resultado → (c/d)x
+#        Cada passo gera uma entrada separada na lista devolvida por
+#        combine_terms_stepwise, que é depois transformada em Steps pelo caller.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _coef_rational(term):
+    """Devolve o coeficiente racional de um termo em x (pode ser Rational ou Integer)."""
+    return sp.Rational(term.coeff(x))
+
+
+def _render_x_term(coef):
+    """Devolve a expressão SymPy coef*x para um coeficiente racional."""
+    return coef * x
+
+
 def combine_terms_stepwise(terms):
+    """
+    Combina termos semelhantes passo a passo, seguindo a lógica:
+
+    Para termos com x (qualquer número):
+      1. Converter TODOS para o denominador comum de uma vez
+         → emite __latex__ com todos os termos convertidos
+      2. Juntar todos os numeradores: (a + b + c)/d · x
+         → emite __latex__ com a expressão não avaliada
+      3. Emite lista SymPy com o resultado final
+
+    Para constantes (qualquer número):
+      1. Converter TODOS para denominador comum
+      2. Juntar numeradores
+      3. Resultado
+
+    Devolve lista de entradas:
+      - lista de termos SymPy  (estado actualizado)
+      - ("__latex__", latex_str, sympy_terms_list)  (passo visual intermédio)
+    """
+    from math import lcm as _mlcm
+    from functools import reduce as _freduce
 
     new_terms = terms.copy()
     steps = []
 
-    i = 0
-    while i < len(new_terms) - 1:
-        t1 = new_terms[i]
-        t2 = new_terms[i + 1]
+    def _frac_x_latex(num, den):
+        """LaTeX de (num/den)·x forçando o denominador visível."""
+        if den == 1:
+            if num == 1:  return "x"
+            if num == -1: return "- x"
+            return f"{num} x"
+        if num == 1:  return fr"\frac{{x}}{{{den}}}"
+        if num == -1: return fr"- \frac{{x}}{{{den}}}"
+        if num < 0:   return fr"- \frac{{{abs(num)} x}}{{{den}}}"
+        return fr"\frac{{{num} x}}{{{den}}}"
 
-        both_have_x = t1.has(x) and t2.has(x)
-        both_are_const = not t1.has(x) and not t2.has(x)
+    def _frac_latex(num, den):
+        """LaTeX de num/den forçando o denominador visível."""
+        if den == 1: return str(num)
+        if num < 0:  return fr"- \frac{{{abs(num)}}}{{{den}}}"
+        return fr"\frac{{{num}}}{{{den}}}"
 
-        if both_have_x:
-            coef = t1.coeff(x) + t2.coeff(x)
-            new_term = coef * x
-            new_terms = new_terms[:i] + [new_term] + new_terms[i + 2:]
-            steps.append(new_terms.copy())
-        elif both_are_const:
-            new_term = t1 + t2
-            new_terms = new_terms[:i] + [new_term] + new_terms[i + 2:]
-            steps.append(new_terms.copy())
+    def _join_latex(parts):
+        """Junta strings LaTeX com +/- explícitos e espaços correctos."""
+        result = parts[0]
+        for p in parts[1:]:
+            if p.startswith("- "):
+                result += " " + p
+            else:
+                result += " + " + p
+        return result
+
+    # ── Separar x-terms e const-terms ────────────────────────────────────────
+    x_terms    = [t for t in new_terms if     t.has(x)]
+    const_terms = [t for t in new_terms if not t.has(x)]
+
+    # ── Processar variáveis ───────────────────────────────────────────────────
+    if len(x_terms) > 1:
+        coefs = [sp.Rational(t.coeff(x)) for t in x_terms]
+        dens  = [c.q for c in coefs]
+        den_comum = _freduce(_mlcm, dens)
+
+        # Verificar se já têm todos o mesmo denominador
+        all_same = all(d == den_comum for d in dens)
+
+        if not all_same:
+            # Passo A: todos os termos convertidos para o denominador comum
+            ns = [c.p * (den_comum // c.q) for c in coefs]
+            parts_a = [_frac_x_latex(n, den_comum) for n in ns]
+            latex_a = _join_latex(parts_a)
+            steps.append(("__latex__", latex_a, new_terms.copy()))
         else:
-            i += 1
+            ns = [c.p for c in coefs]
+
+        # Passo B: (n1 + n2 + ...)/den · x  — numeradores não avaliados
+        sum_num = sum(ns)
+        num_expr = " + ".join(str(n) if n >= 0 else str(n) for n in ns)
+        # Simplificar sinal: "1 + -6" → "1 - 6"
+        num_expr = re.sub(r'\+\s*-', '- ', num_expr)
+        if den_comum > 1:
+            latex_b = fr"\frac{{({num_expr}) x}}{{{den_comum}}}"
+        else:
+            latex_b = f"({num_expr}) x"
+        if not all_same:
+            steps.append(("__latex__", latex_b, new_terms.copy()))
+
+        # Passo C: resultado final
+        combined = sp.Rational(sum_num, den_comum) * x
+        new_terms = const_terms + [combined] if const_terms else [combined]
+        # devolver só o x-term actualizado + consts originais na mesma ordem
+        new_terms = [combined] + const_terms
+        steps.append(new_terms.copy())
+
+    # ── Processar constantes ──────────────────────────────────────────────────
+    elif len(const_terms) > 1:
+        coefs_c = [sp.Rational(t) for t in const_terms]
+        dens_c  = [c.q for c in coefs_c]
+        den_comum_c = _freduce(_mlcm, dens_c)
+        all_same_c = all(d == den_comum_c for d in dens_c)
+
+        if not all_same_c:
+            ns_c = [c.p * (den_comum_c // c.q) for c in coefs_c]
+            parts_a = [_frac_latex(n, den_comum_c) for n in ns_c]
+            latex_a = _join_latex(parts_a)
+            steps.append(("__latex__", latex_a, new_terms.copy()))
+        else:
+            ns_c = [c.p for c in coefs_c]
+
+        sum_num_c = sum(ns_c)
+        num_expr_c = " + ".join(str(n) for n in ns_c)
+        num_expr_c = re.sub(r'\+\s*-', '- ', num_expr_c)
+        latex_b_c = fr"\frac{{{num_expr_c}}}{{{den_comum_c}}}" if den_comum_c > 1 else f"({num_expr_c})"
+        if not all_same_c:
+            steps.append(("__latex__", latex_b_c, new_terms.copy()))
+
+        combined_c = sp.Rational(sum_num_c, den_comum_c)
+        new_terms_c = x_terms + [combined_c] if x_terms else [combined_c]
+        steps.append(new_terms_c.copy())
 
     return steps
 
@@ -59,11 +178,7 @@ def substitution_steps(expr, value):
 
 
 def common_divisor_of_constants(terms):
-    """Return the largest rational divisor that divides all constant terms.
-
-    For rational constants this returns gcd(numerators)/lcm(denominators) as a
-    Rational so it can represent integer or fractional common divisors.
-    """
+    """Return the largest rational divisor that divides all constant terms."""
     if not terms:
         return sp.Integer(1)
 
@@ -76,21 +191,7 @@ def common_divisor_of_constants(terms):
     return sp.Rational(gcd_nums, mmc)
 
 
-# ---------------------------------------------------------------------------
-# FIX: stepwise_string_eval — walk the unevaluated AST manually.
-#
-# O problema antigo: evaluate=False NÃO impede o SymPy de fazer constant
-# folding em expressões puramente numéricas (ex: "2*3+1" → 7 imediatamente).
-# Portanto preorder_traversal não encontrava Mul/Add nenhum para reduzir,
-# e a animação saltava directamente da expressão substituída para a igualdade.
-#
-# A solução: construir a árvore AST manualmente com evaluate=False e percorrê-
-# la em post-order, registando cada redução elementar como um par (antes, depois).
-# ---------------------------------------------------------------------------
-
 def _unwrap(expr):
-    """Unwrap UnevaluatedExpr recursivamente para que is_number e isinstance
-    funcionem correctamente durante a redução do AST."""
     if isinstance(expr, sp.UnevaluatedExpr):
         return _unwrap(expr.args[0])
     if expr.args:
@@ -101,24 +202,12 @@ def _unwrap(expr):
 
 
 def _collect_mul_add_steps(sym):
-    """
-    Percorre o AST unevaluated de sym e devolve uma lista de pares
-    (before_sym, after_sym), um por cada redução aritmética elementar:
-      - 1.ª passagem: todos os Mul cujos args são números → produto
-      - 2.ª passagem: todos os Add cujos args são números  → soma
-    Post-order: sub-expressões internas são reduzidas antes das externas.
-    UnevaluatedExpr é unwrapped antes de processar para que is_number
-    funcione correctamente (UnevaluatedExpr(3).is_number é True mas
-    impede a avaliação do Mul pai).
-    """
     pairs = []
-
-    # Unwrap primeiro para garantir que não há UnevaluatedExpr a bloquear
     sym = _unwrap(sym)
 
     def _reduce_muls(expr):
         if isinstance(expr, sp.Mul) and all(a.is_number for a in expr.args):
-            result = sp.Mul(*expr.args)   # avalia intencionalmente aqui
+            result = sp.Mul(*expr.args)
             pairs.append((expr, result))
             return result
         new_args = []
@@ -136,7 +225,7 @@ def _collect_mul_add_steps(sym):
 
     def _reduce_adds(expr):
         if isinstance(expr, sp.Add) and all(a.is_number for a in expr.args):
-            result = sp.Add(*expr.args)   # avalia intencionalmente aqui
+            result = sp.Add(*expr.args)
             pairs.append((expr, result))
             return result
         new_args = []
@@ -169,23 +258,14 @@ def _collect_mul_add_steps(sym):
 
 
 def stepwise_string_eval(expr_str: str):
-    """
-    Dada uma string de expressão numérica (após substituição), devolve uma
-    lista ordenada de strings LaTeX mostrando cada redução aritmética elementar.
-    Primeiro elemento = expressão tal como está; último = valor completamente
-    simplificado. Entradas adjacentes diferem por exactamente uma operação.
-    """
     expr_str = expr_str.strip()
-
     cleaned = fix_implicit_mul(expr_str)
     sym = safe_sympify(cleaned)
 
-    # Se já for um número simples, não há passos intermédios a mostrar
     if sym.is_number and not isinstance(sym, (sp.Add, sp.Mul)):
         return [sp.latex(sym)]
 
     steps_latex = [sp.latex(sym)]
-
     pairs, final = _collect_mul_add_steps(sym)
 
     seen = set()
@@ -196,12 +276,10 @@ def stepwise_string_eval(expr_str: str):
         seen.add(key)
         steps_latex.append(sp.latex(after))
 
-    # Garantir que o valor final simplificado é o último elemento
     final_latex = sp.latex(sp.simplify(final))
     if steps_latex[-1] != final_latex:
         steps_latex.append(final_latex)
 
-    # Remover entradas consecutivas idênticas
     deduped = [steps_latex[0]]
     for s in steps_latex[1:]:
         if s != deduped[-1]:
@@ -210,25 +288,10 @@ def stepwise_string_eval(expr_str: str):
     return deduped
 
 
-# ---------------------------------------------------------------------------
-# FIX: merge_side_steps — substitui o antigo for-loop que emitia Steps mesmo
-# quando before == after (sem mudança visível), e que podia saltar transições
-# quando os dois lados tinham números de passos diferentes.
-# ---------------------------------------------------------------------------
-
 def merge_side_steps(left_steps, right_steps, initial_left, initial_right, steps):
-    """
-    Mostra primeiro todos os passos do lado esquerdo (mantendo o direito fixo),
-    depois todos os passos do lado direito (mantendo o esquerdo fixo).
-    Assim cada Step corresponde a exactamente uma operação num único lado,
-    evitando que operações de lados diferentes apareçam na mesma transição.
-    Só emite Steps quando before != after.
-    Devolve (cur_left, cur_right) — as strings LaTeX finais de cada lado.
-    """
     cur_left  = initial_left
     cur_right = initial_right
 
-    # Primeiro: todos os passos do lado esquerdo
     for l_after in left_steps:
         before = f"{cur_left} = {cur_right}"
         after  = f"{l_after} = {cur_right}"
@@ -236,7 +299,6 @@ def merge_side_steps(left_steps, right_steps, initial_left, initial_right, steps
             steps.append(Step(before=before, after=after))
         cur_left = l_after
 
-    # Depois: todos os passos do lado direito
     for r_after in right_steps:
         before = f"{cur_left} = {cur_right}"
         after  = f"{cur_left} = {r_after}"
@@ -248,10 +310,6 @@ def merge_side_steps(left_steps, right_steps, initial_left, initial_right, steps
 
 
 def _decimal_str(solution):
-    """
-    Converte solução racional para string decimal arredondada a 3 casas.
-    Devolve None se for inteiro (não precisa de decimal).
-    """
     if isinstance(solution, sp.Integer) or (isinstance(solution, sp.Rational) and solution.q == 1):
         return None
     val = float(solution)
@@ -263,10 +321,6 @@ def _decimal_str(solution):
 
 
 def _fraction_simplification_steps(num_str, den_str):
-    """
-    Gera passos de simplificação de fração não reduzida.
-    Ex: '4', '8' -> ['\frac{4}{8}', '\frac{1}{2}']
-    """
     import math
     num, den = int(num_str), int(den_str)
     steps = [r'\frac{' + num_str + r'}{' + den_str + r'}']
@@ -277,11 +331,6 @@ def _fraction_simplification_steps(num_str, den_str):
 
 
 def _decimal_simplification_steps(decimal_str):
-    """
-    Gera passos de conversão de decimal para fração.
-    Ex: '0.5' -> ['0.5', '\frac{5}{10}', '\frac{1}{2}']
-         '0.9' -> ['0.9', '\frac{9}{10}']
-    """
     import math
     s = decimal_str.replace(',', '.')
     if '.' not in s:
@@ -303,6 +352,107 @@ def _decimal_simplification_steps(decimal_str):
     return steps
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# CORREÇÃO 2 — _rational_coef_solve_steps
+#
+# Quando o coeficiente de x é racional (ex: -5/2), em vez de saltar
+# directamente para x = solução, mostra os seguintes passos intermédios:
+#
+#   Eq inicial :  (-5/2)x = -12
+#   Passo 1    :  -5x = (-12)·2          (multiplicar ambos os lados por den)
+#   Passo 2    :  x = ((-12)·2) / (-5)   (dividir ambos os lados por num)
+#   Passo 3    :  x = -24 / -5           (avaliar a multiplicação)
+#   Passo 4    :  x = 24/5               (simplificar o sinal)
+#
+# A função devolve uma lista de Step's prontos a concatenar ao array steps
+# principal de solve_linear.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _rational_coef_solve_steps(coef_rational, const_rational, final_left_latex, final_right_latex):
+    """
+    Gera passos para resolver (p/q)·x = c quando q > 1.
+
+    Sequência:
+      -x/5 = 25/2
+      → [expl] Multiplicar ambos os lados por 5
+      → -x = 25·5/2          (se c é fracção, manter numerador/denominador)
+      → -x = 125/2           (avaliar produto)
+      → [expl] Dividir ambos os lados por -1
+      → x = -(125/2)
+      → x = -125/2           (simplificar sinal)
+    """
+    result_steps = []
+
+    p = coef_rational.p   # numerador do coeficiente  (ex: -1  ou  -5)
+    q = coef_rational.q   # denominador               (ex:  5  ou   2)
+    c = const_rational    # lado direito como Rational (ex: Rational(25,2))
+
+    eq_0 = f"{final_left_latex} = {final_right_latex}"
+
+    # ── Passo 0: explicação — multiplicar por q ───────────────────────────────
+    result_steps.append(Step(
+        before=eq_0, after=eq_0,
+        explanation=f"Multiplicar ambos os lados por {q}"
+    ))
+
+    # ── Passo 1: p·x = c·q ───────────────────────────────────────────────────
+    # lado esquerdo: p·x  (inteiro, denominador eliminado)
+    left_1_latex = sp.latex(sp.Integer(p) * x)
+
+    # lado direito: c·q  — se c é fracção mostramos (cn/cd)·q = cn·q/cd
+    cn, cd = c.p, c.q
+    # Parênteses se cn negativo
+    cn_str = f"({cn})" if cn < 0 else str(cn)
+    if cd == 1:
+        # c é inteiro
+        right_1_latex = f"{cn_str} \\cdot {q}"
+    else:
+        # c é fracção: mostrar cn·q / cd
+        right_1_latex = f"\\frac{{{cn_str} \\cdot {q}}}{{{cd}}}"
+
+    eq_1 = f"{left_1_latex} = {right_1_latex}"
+    result_steps.append(Step(before=eq_0, after=eq_1))
+
+    # Avaliar o produto  cn·q
+    prod_num = cn * q      # ex: 25 * 5 = 125
+    if cd == 1:
+        right_eval_latex = f"{prod_num}"
+    else:
+        right_eval_latex = sp.latex(sp.Rational(prod_num, cd))
+
+    eq_1b = f"{left_1_latex} = {right_eval_latex}"
+    if eq_1b != eq_1:
+        result_steps.append(Step(before=eq_1, after=eq_1b))
+    else:
+        eq_1b = eq_1
+
+    # ── Passo 2: dividir por p → x = resultado/p ─────────────────────────────
+    result_steps.append(Step(
+        before=eq_1b, after=eq_1b,
+        explanation=f"Dividir ambos os lados por {p}"
+    ))
+
+    # Calcular solução: (c·q) / p = cn·q / (cd·p)
+    solution = sp.Rational(prod_num, cd * p)   # SymPy simplifica automaticamente
+
+    # Mostrar passo intermédio: x = right_eval / p  (não avaliado)
+    if cd == 1:
+        right_2_latex = f"\\frac{{{prod_num}}}{{{p}}}"
+    else:
+        # right_eval já é frac{prod_num}{cd}, dividir por p → frac{prod_num}{cd·p}
+        right_2_latex = f"\\frac{{{prod_num}}}{{{cd * p}}}"
+
+    eq_2 = f"x = {right_2_latex}"
+    result_steps.append(Step(before=eq_1b, after=eq_2))
+
+    # ── Passo 3: simplificar → x = solução ───────────────────────────────────
+    eq_3 = f"x = {sp.latex(solution)}"
+    if eq_3 != eq_2:
+        result_steps.append(Step(before=eq_2, after=eq_3))
+
+    return result_steps, solution
+
+
 # Função principal que resolve equações lineares passo a passo
 def solve_linear(equation: str):
 
@@ -310,12 +460,9 @@ def solve_linear(equation: str):
 
     steps = []
 
-    # Detectar e mostrar passos de simplificação de decimais e frações
-    # antes de começar a resolver
-    _raw_decimals = detect_decimals(equation)
-    _raw_fractions = detect_raw_fractions(equation)
+    _raw_decimals   = detect_decimals(equation)
+    _raw_fractions  = detect_raw_fractions(equation)
 
-    # Converter a/b para \frac{a}{b} na equação de display desde o início
     import re as _re_disp
     def _eq_to_latex_display(eq):
         return _re_disp.sub(
@@ -326,16 +473,13 @@ def solve_linear(equation: str):
 
     equation_display = _eq_to_latex_display(equation)
 
-    # Passos: decimal -> fração não reduzida -> fração reduzida
     current_eq_display = equation_display
     for dec_str, dec_val in _raw_decimals:
         dec_steps = _decimal_simplification_steps(dec_str)
-        # dec_steps: ['0.5', '\frac{5}{10}', '\frac{1}{2}']
-        # Substituir passo a passo: dec_steps[i-1] -> dec_steps[i]
         for i in range(1, len(dec_steps)):
             before_eq = current_eq_display
-            src = dec_steps[i-1]  # o que está na string actual
-            dst = dec_steps[i]    # o que vai ficar
+            src = dec_steps[i-1]
+            dst = dec_steps[i]
             after_eq = before_eq.replace(src, dst, 1)
             if before_eq != after_eq:
                 steps.append(Step(
@@ -345,17 +489,14 @@ def solve_linear(equation: str):
                 ))
                 current_eq_display = after_eq
 
-    # Passos: fração não reduzida -> fração reduzida
     for num_s, den_s, frac_val in _raw_fractions:
-        frac_steps = _fraction_simplification_steps(num_s, den_s)
-        frac_orig_str = num_s + '/' + den_s  # como aparece na equação escrita
-        # Passo 1: mostrar a/b -> \frac{a}{b}
+        frac_steps   = _fraction_simplification_steps(num_s, den_s)
+        frac_orig_str = num_s + '/' + den_s
         if frac_orig_str in current_eq_display:
             eq_with_frac = current_eq_display.replace(frac_orig_str, frac_steps[0], 1)
             if eq_with_frac != current_eq_display:
                 steps.append(Step(before=current_eq_display, after=eq_with_frac))
                 current_eq_display = eq_with_frac
-        # Passo 2: simplificar \frac{a}{b} -> \frac{a/g}{b/g} se possível
         if len(frac_steps) > 1:
             for i in range(1, len(frac_steps)):
                 before_eq = current_eq_display
@@ -368,159 +509,158 @@ def solve_linear(equation: str):
                     ))
                     current_eq_display = after_eq
 
-    # A partir daqui usar a equação normalizada (com racionais)
-    # O parse_equation já normalizou left e right
-    left_terms = extract_terms(left)
+    left_terms  = extract_terms(left)
     right_terms = extract_terms(right)
 
-    left_x, left_const = [], []
+    left_x, left_const   = [], []
     right_x, right_const = [], []
 
     for t in left_terms:
-        if t.has(x):
-            left_x.append(t)
-        else:
-            left_const.append(t)
+        if t.has(x): left_x.append(t)
+        else:        left_const.append(t)
 
     for t in right_terms:
-        if t.has(x):
-            right_x.append(t)
-        else:
-            right_const.append(t)
+        if t.has(x): right_x.append(t)
+        else:        right_const.append(t)
 
-    variable_terms = left_x + [-t for t in right_x]
-    constant_terms = right_const + [-t for t in left_const]
+    variable_terms  = left_x + [-t for t in right_x]
+    constant_terms  = right_const + [-t for t in left_const]
 
     new_eq = build_equation(variable_terms, constant_terms)
 
-    # Mostrar a explicação ANTES da transição — o renderer executa
-    # sempre transição→explicação, por isso a explicação tem de vir
-    # num Step próprio antes da mudança visual
-    steps.append(
-        Step(
-            before=equation_display,
-            after=equation_display,
-            explanation="Organizar termos"
-        )
-    )
-    steps.append(
-        Step(
-            before=equation_display,
-            after=new_eq,
-        )
-    )
+    steps.append(Step(
+        before=equation_display,
+        after=equation_display,
+        explanation="Organizar termos"
+    ))
+    steps.append(Step(
+        before=equation_display,
+        after=new_eq,
+    ))
 
     if len(variable_terms) > 1:
-        steps.append(
-            Step(
-                before=new_eq,
-                after=new_eq,
-                explanation="Vamos resolver o lado das variáveis"
-            )
-        )
+        steps.append(Step(
+            before=new_eq,
+            after=new_eq,
+            explanation="Vamos resolver o lado das variáveis"
+        ))
 
-    # --- Simplify variables ---
+    # --- Simplify variables --- (CORREÇÃO 1: lidar com marcadores __latex__)
     current_vars = variable_terms
-    var_steps = combine_terms_stepwise(variable_terms)
+    var_steps    = combine_terms_stepwise(variable_terms)
 
-    for new_vars in var_steps:
-        steps.append(
-            Step(
+    for entry in var_steps:
+        if isinstance(entry, tuple) and entry[0] == "__latex__":
+            # entry = ("__latex__", var_latex_str, current_sympy_terms)
+            # Construir before a partir do estado SymPy actual (current_vars)
+            # e after com o LaTeX manual fornecido + lado direito do before
+            _, var_latex, state_terms = entry
+            before_eq  = build_equation(current_vars, constant_terms)
+            const_side = before_eq.split("=")[1].strip()
+            after_eq   = f"{var_latex} = {const_side}"
+            if before_eq != after_eq:
+                steps.append(Step(before=before_eq, after=after_eq))
+            # NÃO actualizar current_vars aqui — o step seguinte (lista SymPy)
+            # fá-lo com o estado final correcto
+        else:
+            new_vars = entry
+            steps.append(Step(
                 before=build_equation(current_vars, constant_terms),
                 after=build_equation(new_vars, constant_terms)
-            )
-        )
-        current_vars = new_vars
+            ))
+            current_vars = new_vars
 
     # --- Simplify constants ---
     current_consts = constant_terms
 
     if len(constant_terms) > 1:
-        steps.append(
-            Step(
-                before=build_equation(current_vars, current_consts),
-                after=build_equation(current_vars, current_consts),
-                explanation="Agora vamos resolver o lado das constantes"
-            )
-        )
+        steps.append(Step(
+            before=build_equation(current_vars, current_consts),
+            after=build_equation(current_vars, current_consts),
+            explanation="Agora vamos resolver o lado das constantes"
+        ))
 
     const_steps = combine_terms_stepwise(constant_terms)
 
-    for new_consts in const_steps:
-        # Mostrar apenas a transição — sem mensagem de divisão aqui,
-        # pois estamos apenas a somar constantes (ex: 8-20 → -12),
-        # não a dividir. A mensagem de divisão fica reservada para o
-        # CASO 2 onde se divide ambos os lados pelo coeficiente de x.
-        steps.append(
-            Step(
+    for entry in const_steps:
+        if isinstance(entry, tuple) and entry[0] == "__latex__":
+            _, const_latex, _ = entry
+            before_eq = build_equation(current_vars, current_consts)
+            var_side  = before_eq.split("=")[0].strip()
+            after_eq  = f"{var_side} = {const_latex}"
+            if before_eq != after_eq:
+                steps.append(Step(before=before_eq, after=after_eq))
+        else:
+            new_consts = entry
+            steps.append(Step(
                 before=build_equation(current_vars, current_consts),
                 after=build_equation(current_vars, new_consts),
-            )
-        )
-        current_consts = new_consts
+            ))
+            current_consts = new_consts
 
     # Final solve
-    final_left = current_vars[0]
+    final_left  = current_vars[0]
     final_right = current_consts[0]
 
-    coef = final_left.coeff(x)
+    coef  = final_left.coeff(x)
     const = final_right
 
-    # FIX 10: usa sp.Rational directamente em vez de int() para o GCD
     def safe_gcd(a, b):
         return sp.gcd(sp.Rational(a), sp.Rational(b))
 
     def _sympy_stepwise(subst_str, sym_evaled, final_value):
         """
-        Gera lista de tuplos (latex_str, explicacao) com cada passo aritmético.
-        explicacao=None para transições, string para mensagens pedagógicas.
+        Gera lista de tuplos (latex_str, explicacao_ou_None) mostrando cada
+        passo aritmético após substituição de x por final_value.
+
+        Sequência para final_value = p/q (fração):
+          1. Expandir cada coef*(p/q)  →  (coef*p)/(q)   [produto no numerador]
+          2. Simplificar cada fração   →  forma reduzida
+          3. Converter inteiros para denominador comum
+          4. Somar/subtrair frações par a par: mostrar (a op b)/d antes do resultado
+
+        Sequência para final_value inteiro:
+          1. Calcular cada produto coef*val
+          2. Somar termos numéricos
         """
         import re as _re
+        from math import lcm as _mlcm
+        from functools import reduce as _freduce
 
         def _fix_pm(s):
             s = _re.sub(r'-\s*-\s*', '+ ', s)
             s = _re.sub(r'\+\s*-\s*', '- ', s)
-            return s
-
-        def _add_ops(s):
-            s = _re.sub(r'(\d)\s*(\\frac)', r'\1 + \2', s)
-            s = _re.sub(r'(\})\s*(\\frac)', r'\1 + \2', s)
-            return s
+            return s.strip()
 
         result = [(subst_str, None)]
+        cur = subst_str
 
+        # ── Caso inteiro ──────────────────────────────────────────────────────
         if not (isinstance(final_value, sp.Rational) and final_value.q != 1):
-            # Valor inteiro — mostrar multiplicações e somas passo a passo
-            cur = subst_str
-            val_esc_int = _re.escape(sp.latex(final_value))
-            pattern_int = r'(-?\s*\d+)\s*\(' + val_esc_int + r'\)'
-            # Passo 1: resolver cada coef*(inteiro)
-            while True:
-                m = _re.search(pattern_int, cur)
+            val_int = int(final_value)
+            val_latex = sp.latex(final_value)
+            val_esc = _re.escape(val_latex)
+            # Passo 1: resolver cada coef*(val)
+            pattern = r'(-?\s*\d+)\s*\(\s*' + val_esc + r'\s*\)'
+            for _ in range(20):
+                m = _re.search(pattern, cur)
                 if not m: break
-                coef = int(m.group(1).replace(' ', ''))
-                produto = coef * int(final_value)
-                # Se o sinal '-' estava na string e o resultado é positivo,
-                # adicionar '+' para não ficar '10 20' sem operador
-                prod_str = str(produto)
+                coef_v = int(m.group(1).replace(' ', ''))
+                prod = coef_v * val_int
                 before_m = cur[:m.start()]
                 after_m  = cur[m.end():]
-                # Adicionar operador explícito se necessário
-                if before_m.rstrip() and before_m.rstrip()[-1].isdigit():
-                    prod_str = ('+ ' if produto >= 0 else '- ') + str(abs(produto))
+                prod_str = str(prod)
+                if before_m.rstrip() and before_m.rstrip()[-1] not in '+-=(,':
+                    prod_str = ('+ ' if prod >= 0 else '- ') + str(abs(prod))
                 s1 = _fix_pm(before_m + prod_str + after_m)
                 if s1 == cur: break
                 result.append((s1, None)); cur = s1
-            # Passo 2: somar termos numéricos restantes
+            # Passo 2: somar pares numéricos
             final_str = sp.latex(sp.simplify(sym_evaled))
-            # Tentar somar par a par usando Add simples
-            sum_pattern = r'(-?\d+)\s*([+-])\s*(\d+)'
-            for _ in range(10):
-                m = _re.search(sum_pattern, cur)
+            for _ in range(20):
+                m = _re.search(r'(-?\d+)\s*([+-])\s*(\d+)', cur)
                 if not m: break
-                a = int(m.group(1))
-                op = m.group(2)
-                b = int(m.group(3))
+                a, op, b = int(m.group(1)), m.group(2), int(m.group(3))
                 soma = a + b if op == '+' else a - b
                 novo = _fix_pm(cur[:m.start()] + str(soma) + cur[m.end():])
                 if novo == cur: break
@@ -530,140 +670,197 @@ def solve_linear(equation: str):
                 result.append((final_str, None))
             return result
 
-        val_num = final_value.p
-        val_den = final_value.q
-        val_latex_s = sp.latex(final_value)
-        val_esc = _re.escape(val_latex_s)
-        val_num_str = '(' + str(val_num) + ')' if val_num < 0 else str(val_num)
+        # ── Caso fração p/q ───────────────────────────────────────────────────
+        val_num = final_value.p   # ex: -125
+        val_den = final_value.q   # ex:   2
+        val_latex = sp.latex(final_value)
+        val_esc   = _re.escape(val_latex)
 
-        # Passo 1: cada "coef (val)" -> frac{coef*num}{den} -> frac{resultado}{den}
-        pattern = r'(-?\s*\d+)\s*\(' + val_esc + r'\)'
-        cur = subst_str
-        while True:
-            m = _re.search(pattern, cur)
+        # Passo 1a: coef_inteiro * (\frac{p}{q})
+        # Sequência: \frac{coef \cdot (val_num)}{val_den}
+        #          → \frac{prod_num}{val_den}
+        #          → simplificado (inteiro ou fração reduzida)
+        pat_coef_frac = r'(-?\s*\d+)\s*\(\s*' + val_esc + r'\s*\)'
+        for _ in range(20):
+            m = _re.search(pat_coef_frac, cur)
             if not m: break
-            coef = int(m.group(1).replace(' ', ''))
-            produto = coef * val_num
-            c_str = ('(' + str(coef) + ')') if coef < 0 else str(coef)
-            frac_i = r'\frac{' + c_str + r' \cdot ' + val_num_str + r'}{' + str(val_den) + r'}'
-            s1 = _fix_pm(_add_ops(cur[:m.start()] + frac_i + cur[m.end():]))
+            coef_v   = int(m.group(1).replace(' ', ''))
+            prod_num = coef_v * val_num
+            before_m = cur[:m.start()]
+            after_m  = cur[m.end():]
+
+            # Sempre mostrar \cdot, com parênteses se val_num < 0
+            val_num_str = f"({val_num})" if val_num < 0 else str(val_num)
+            frac_prod = r'\frac{' + str(coef_v) + r' \cdot ' + val_num_str + r'}{' + str(val_den) + r'}'
+            s1 = _fix_pm(before_m + frac_prod + after_m)
             if s1 != cur: result.append((s1, None)); cur = s1
-            # Fração não simplificada: mostrar produto/val_den antes de simplificar
-            frac_unsimplified = r'\frac{' + str(produto) + r'}{' + str(val_den) + r'}'
-            frac_simplified    = sp.latex(sp.Rational(produto, val_den))
-            # Passo 2a: substituir frac_i por frac_unsimplified (resultado da mult)
-            s2_raw = cur.replace(frac_i, frac_unsimplified, 1)
-            s2 = _fix_pm(_add_ops(s2_raw))
-            s2 = _re.sub(r'(\d)\s+(\d)', r'\1 + \2', s2)
-            s2 = _fix_pm(s2)
-            if s2 != cur: result.append((s2, None)); cur = s2
-            # Passo 2b: simplificar a fração se o resultado for diferente
-            if frac_simplified != frac_unsimplified:
-                s3 = _fix_pm(_add_ops(cur.replace(frac_unsimplified, frac_simplified, 1)))
-                s3 = _re.sub(r'(\d)\s+(\d)', r'\1 + \2', s3)
-                s3 = _fix_pm(s3)
-                if s3 != cur: result.append((s3, None)); cur = s3
 
-        final_val = sp.simplify(sym_evaled)
-        final_str = sp.latex(final_val)
+            # Avaliar numerador: \frac{prod_num}{val_den}
+            # Se cancela para inteiro, saltar directamente (sem mostrar a fração intermédia)
+            frac_eval = r'\frac{' + str(prod_num) + r'}{' + str(val_den) + r'}'
+            frac_simp = sp.latex(sp.Rational(prod_num, val_den))
+            if frac_simp == frac_eval:
+                # Não simplifica — mostrar frac_eval e ficar
+                s2 = _fix_pm(cur.replace(frac_prod, frac_eval, 1))
+                if s2 != cur: result.append((s2, None)); cur = s2
+            else:
+                # Simplifica (inteiro ou fração reduzida) — saltar frac_eval se for inteiro
+                simp_is_int = not ('\\frac' in frac_simp)
+                if simp_is_int:
+                    # Vai directamente de frac_prod para o inteiro
+                    s3 = _fix_pm(cur.replace(frac_prod, frac_simp, 1))
+                    if s3 != cur: result.append((s3, None)); cur = s3
+                else:
+                    # Fração reduzida: mostrar frac_eval primeiro, depois simplificar
+                    s2 = _fix_pm(cur.replace(frac_prod, frac_eval, 1))
+                    if s2 != cur: result.append((s2, None)); cur = s2
+                    s3 = _fix_pm(cur.replace(frac_eval, frac_simp, 1))
+                    if s3 != cur: result.append((s3, None)); cur = s3
 
-        # Encontrar inteiros soltos fora de chaves
-        def find_isolated_ints(s):
+        # Passo 1b: \frac{a}{b} * (\frac{p}{q})
+        # Sequência: \frac{a \cdot (val_num)}{b \cdot val_den}
+        #          → \frac{prod_n}{prod_d}
+        #          → simplificado
+        pat_frac_frac = r'\\frac\{(\d+)\}\{(\d+)\}\s*\(\s*' + val_esc + r'\s*\)'
+        for _ in range(20):
+            m = _re.search(pat_frac_frac, cur)
+            if not m: break
+            fa, fb = int(m.group(1)), int(m.group(2))
+            prod_n = fa * val_num
+            prod_d = fb * val_den
+            before_m = cur[:m.start()]
+            after_m  = cur[m.end():]
+
+            val_num_str = f"({val_num})" if val_num < 0 else str(val_num)
+            frac_prod2 = r'\frac{' + str(fa) + r' \cdot ' + val_num_str + r'}{' + str(fb) + r' \cdot ' + str(val_den) + r'}'
+            s1 = _fix_pm(before_m + frac_prod2 + after_m)
+            if s1 != cur: result.append((s1, None)); cur = s1
+
+            frac_eval2 = r'\frac{' + str(prod_n) + r'}{' + str(prod_d) + r'}'
+            frac_simp2 = sp.latex(sp.Rational(prod_n, prod_d))
+            if frac_simp2 == frac_eval2:
+                s2 = _fix_pm(cur.replace(frac_prod2, frac_eval2, 1))
+                if s2 != cur: result.append((s2, None)); cur = s2
+            else:
+                simp_is_int2 = '\\frac' not in frac_simp2
+                if simp_is_int2:
+                    s3 = _fix_pm(cur.replace(frac_prod2, frac_simp2, 1))
+                    if s3 != cur: result.append((s3, None)); cur = s3
+                else:
+                    s2 = _fix_pm(cur.replace(frac_prod2, frac_eval2, 1))
+                    if s2 != cur: result.append((s2, None)); cur = s2
+                    s3 = _fix_pm(cur.replace(frac_eval2, frac_simp2, 1))
+                    if s3 != cur: result.append((s3, None)); cur = s3
+
+        # Passo 2: converter inteiros isolados para o denominador comum das frações presentes
+        def _find_isolated_ints(s):
+            """Encontra inteiros fora de {}, não seguidos de /."""
             found = []; depth = 0; i = 0
             while i < len(s):
                 c = s[i]
                 if c == '{': depth += 1; i += 1; continue
-                elif c == '}': depth -= 1; i += 1; continue
+                if c == '}': depth -= 1; i += 1; continue
                 if depth > 0: i += 1; continue
+                # Sinal opcional
+                sign = 1
+                start = i
+                if c == '-' and i + 1 < len(s) and s[i+1].isdigit():
+                    # verificar se é sinal de menos (precedido por espaço/operador)
+                    if i == 0 or s[i-1] in ' +=({':
+                        sign = -1; i += 1; c = s[i]
+                    else:
+                        i += 1; continue
                 if c.isdigit():
-                    if i > 0 and (s[i-1].isdigit() or s[i-1] == '{'): i += 1; continue
                     j = i
                     while j < len(s) and s[j].isdigit(): j += 1
-                    if j < len(s) and s[j] in '/}': i = j; continue
-                    try: n = int(s[i:j])
+                    # ignorar se dentro de {} ou seguido de /
+                    if j < len(s) and s[j] in '/{': i = j; continue
+                    try: n = sign * int(s[i:j])
                     except: i += 1; continue
-                    if n != 0: found.append((i, j, n))
+                    if n != 0: found.append((start, j, n))
                     i = j
                 else: i += 1
             return found
 
-        # Passo 2: inteiros -> frac com denominador comum
-        # Calcular o MMC dos denominadores presentes na string actual
-        has_frac = r'\frac' in cur
-        if has_frac and find_isolated_ints(cur):
-            # Extrair todos os denominadores presentes
-            dens_presentes = [int(d) for d in _re.findall(r'\\frac\{[^}]+\}\{(\d+)\}', cur)]
-            if dens_presentes:
-                from math import lcm as _lcm
-                from functools import reduce as _reduce
-                den_comum = _reduce(_lcm, dens_presentes)
-            else:
-                den_comum = val_den
+        def _dens_in(s):
+            return [int(d) for d in _re.findall(r'\\frac\{[^}]+\}\{(\d+)\}', s)]
+
+        dens = _dens_in(cur)
+        if dens and _find_isolated_ints(cur):
+            den_comum = _freduce(_mlcm, dens)
             result.append((cur, f'Reduzir ao mesmo denominador ({den_comum})'))
             for _ in range(30):
-                iso = find_isolated_ints(cur)
+                iso = _find_isolated_ints(cur)
                 if not iso: break
                 start, end, n = iso[0]
-                frac = r'\frac{' + str(n * den_comum) + r'}{' + str(den_comum) + r'}'
-                novo = _fix_pm(_add_ops(cur[:start] + frac + cur[end:]))
+                new_num = n * den_comum
+                # Manter sinal: se n < 0, mostrar -\frac{abs*den}{den}
+                frac = r'\frac{' + str(new_num) + r'}{' + str(den_comum) + r'}'
+                novo = _fix_pm(cur[:start] + frac + cur[end:])
                 if novo == cur: break
                 result.append((novo, None)); cur = novo
-                if cur == final_str: break
 
-        # Passo 3: somar fracoes par a par
-        # Se denominadores forem diferentes, converter primeiro para denominador comum
+        # Passo 3: somar/subtrair frações par a par
+        # Padrão: \frac{a}{d} op \frac{b}{d}  (mesmo denominador)
         fp = r'(\\frac\{(-?\d+)\}\{(\d+)\})\s*([+-])\s*(\\frac\{(-?\d+)\}\{(\d+)\})'
-        from math import lcm as _lcm2
         for _ in range(30):
             m = _re.search(fp, cur)
             if not m: break
             na, da = int(m.group(2)), int(m.group(3))
-            op = m.group(4)
+            op   = m.group(4)
             nb, db = int(m.group(6)), int(m.group(7))
-            # Verificar se há '-' antes do primeiro rac (sinal externo)
+            # Verificar sinal externo (- antes do primeiro \frac)
             prefix = cur[:m.start()].rstrip()
             if prefix.endswith('-'):
                 na = -abs(na)
-                # Remover o '-' do prefix para não ficar duplicado
-                cur = cur[:len(prefix)-1] + cur[len(prefix):]
-                m = _re.search(fp, cur)  # re-search após remoção
+                cur = cur[:len(prefix)-1].rstrip() + ' ' + cur[len(prefix):]
+                m = _re.search(fp, cur)
                 if not m: break
                 na, da = int(m.group(2)), int(m.group(3))
                 na = -abs(na)
                 op = m.group(4)
                 nb, db = int(m.group(6)), int(m.group(7))
+            # Se denominadores diferentes, converter para denominador comum
             if da != db:
-                # Denominadores diferentes: converter para denominador comum
+                from math import lcm as _lcm2
                 dc = _lcm2(da, db)
                 na_new = na * (dc // da)
                 nb_new = nb * (dc // db)
-                frac_a_new = r'\frac{' + str(na_new) + r'}{' + str(dc) + r'}'
-                frac_b_new = r'\frac{' + str(nb_new) + r'}{' + str(dc) + r'}'
-                novo = _fix_pm(_add_ops(
-                    cur[:m.start()] + frac_a_new + ' ' + op + ' ' + frac_b_new + cur[m.end():]
-                ))
+                f_a = r'\frac{' + str(na_new) + r'}{' + str(dc) + r'}'
+                f_b = r'\frac{' + str(nb_new) + r'}{' + str(dc) + r'}'
+                novo = _fix_pm(cur[:m.start()] + f_a + ' ' + op + ' ' + f_b + cur[m.end():])
                 if novo == cur: break
                 result.append((novo, None)); cur = novo
                 continue
-            soma_n = na + (nb if op == '+' else -nb)
-            # Passo intermédio: juntar numeradores antes de calcular
-            # ex: rac{12}{3} - rac{23}{3} -> rac{12 - 23}{3} -> rac{-11}{3}
-            nb_signed = nb if op == '+' else -nb
-            if op == '+':
-                num_expr_str = str(na) + ' + ' + str(nb)
-            else:
-                num_expr_str = str(na) + ' - ' + str(nb)
-            frac_joined = r'\frac{' + num_expr_str + r'}{' + str(da) + r'}'
-            novo_joined = _fix_pm(_add_ops((cur[:m.start()] + frac_joined + cur[m.end():]).strip()))
-            if novo_joined != cur:
-                result.append((novo_joined, None)); cur = novo_joined
-            # Agora calcular o resultado
-            frac_soma = '0' if soma_n == 0 else sp.latex(sp.Rational(soma_n, da))
-            novo = _fix_pm(_add_ops((cur.replace(frac_joined, frac_soma, 1)).strip()))
-            if novo == cur: break
-            result.append((novo, None)); cur = novo
-            if cur == final_str: break
+            # Mesmo denominador: mostrar (a op b)/d, depois avaliar numerador, depois simplificar
+            nb_s = nb if op == '+' else -nb
+            num_expr = f"{na} + {nb}" if op == '+' else f"{na} - {nb}"
+            frac_joined = r'\frac{' + num_expr + r'}{' + str(da) + r'}'
+            novo_j = _fix_pm(cur[:m.start()] + frac_joined + cur[m.end():])
+            if novo_j != cur:
+                result.append((novo_j, None)); cur = novo_j
 
+            soma_n = na + nb_s
+            # FIX 3: mostrar \frac{soma_n}{da} antes de simplificar
+            frac_evaluated = r'\frac{' + str(soma_n) + r'}{' + str(da) + r'}'
+            frac_result    = sp.latex(sp.Rational(soma_n, da))
+            # Passo intermédio: numerador avaliado (apenas se diferente do joined e do final)
+            if frac_evaluated != frac_joined:
+                novo_eval = _fix_pm(cur.replace(frac_joined, frac_evaluated, 1))
+                if novo_eval != cur:
+                    result.append((novo_eval, None)); cur = novo_eval
+            # Passo final: simplificar (apenas se diferente do avaliado)
+            if frac_result != frac_evaluated:
+                novo = _fix_pm(cur.replace(frac_evaluated, frac_result, 1))
+                if novo == cur: break
+                result.append((novo, None)); cur = novo
+            elif frac_result == frac_evaluated:
+                # Já está no formato final — substituir o joined pelo resultado
+                novo = _fix_pm(cur.replace(frac_joined, frac_result, 1) if frac_joined in cur else cur)
+                if novo != cur:
+                    result.append((novo, None)); cur = novo
+
+        final_str = sp.latex(sp.simplify(sym_evaled))
         if cur != final_str:
             result.append((final_str, None))
 
@@ -671,49 +868,36 @@ def solve_linear(equation: str):
         deduped = [result[0]]
         for item in result[1:]:
             s, e = item
-            ps = deduped[-1][0]
-            if s != ps or e is not None:
+            if s != deduped[-1][0] or e is not None:
                 deduped.append(item)
         return deduped
 
 
     def _check_solution(final_value, final_latex, equation, steps):
-        """Verificação da solução com passos intermédios completos."""
-
         left_str, right_str = equation.split("=")
         left_sym  = sp.sympify(normalize_expression(left_str.strip()), evaluate=False)
         right_sym = sp.sympify(normalize_expression(right_str.strip()), evaluate=False)
 
-        # Construir equation_latex a partir da equação original,
-        # convertendo a/b para \frac{a}{b} mas preservando a ordem
         import re as _re2
         def _fracs_to_latex(s):
-            # Substituir a/b por \frac{a}{b}, ignorando casos como x/y onde há letras
             return _re2.sub(r'(-?\d+)/(\d+)', lambda m: r'\frac{' + m.group(1) + r'}{' + m.group(2) + r'}', s)
         left_latex_for_display  = _fracs_to_latex(left_str.strip())
         right_latex_for_display = _fracs_to_latex(right_str.strip())
-        # Normalizar multiplicação implícita para LaTeX (ex: 5/4x -> \frac{5}{4}x)
         left_latex_for_display  = _re2.sub(r'(\\frac\{\d+\}\{\d+\})(\s*)([a-zA-Z])', r'\1 \3', left_latex_for_display)
         right_latex_for_display = _re2.sub(r'(\\frac\{\d+\}\{\d+\})(\s*)([a-zA-Z])', r'\1 \3', right_latex_for_display)
         equation_latex = f"{left_latex_for_display} = {right_latex_for_display}"
 
-        steps.append(
-            Step(
-                before=equation_latex,
-                after=equation_latex,
-                explanation="Vamos verificar!"
-            )
-        )
-        steps.append(
-            Step(
-                before=equation_latex,
-                after=equation_latex,
-                explanation=f"Agora vamos substituir x por {final_latex}"
-            )
-        )
+        steps.append(Step(
+            before=equation_latex,
+            after=equation_latex,
+            explanation="Vamos verificar!"
+        ))
+        steps.append(Step(
+            before=equation_latex,
+            after=equation_latex,
+            explanation=f"Agora vamos substituir x por {final_latex}"
+        ))
 
-        # FIX 4: substituir x na string LaTeX para preservar a ordem original
-        # xreplace reordena os args do Add após substituição numérica
         left_latex_orig  = left_latex_for_display
         right_latex_orig = right_latex_for_display
         val_latex = sp.latex(final_value)
@@ -726,18 +910,12 @@ def solve_linear(equation: str):
         right_subst_str = _sub_x_in_latex(right_latex_orig, val_latex)
 
         substituted_display = f"{left_subst_str} = {right_subst_str}"
-        steps.append(
-            Step(
-                before=equation_latex,
-                after=substituted_display,
-            )
-        )
+        steps.append(Step(
+            before=equation_latex,
+            after=substituted_display,
+        ))
 
-        # Substituir x termo a termo para preservar Muls separados.
-        # left_sym.xreplace() combinaria -30x + 40x em 10x antes de substituir.
         def _subst_terms(sym, val):
-            """Substitui x em cada termo de um Add individualmente,
-            reconstruindo sem avaliar para preservar cada Mul separado."""
             if isinstance(sym, sp.Add):
                 new_terms = [t.xreplace({x: sp.UnevaluatedExpr(val)}) for t in sym.args]
                 return sp.Add(*new_terms, evaluate=False)
@@ -746,7 +924,6 @@ def solve_linear(equation: str):
         left_evaled  = _subst_terms(left_sym,  final_value)
         right_evaled = _subst_terms(right_sym, final_value)
 
-          # Gerar passos — lista de (latex_str, explicacao_ou_None)
         left_tuples  = _sympy_stepwise(left_subst_str,  left_evaled,  final_value)
         right_tuples = _sympy_stepwise(right_subst_str, right_evaled, final_value)
 
@@ -757,13 +934,12 @@ def solve_linear(equation: str):
                 if e: ex[i] = e
             return sl, ex
 
-        left_steps,  left_expls  = _extract(left_tuples)
-        right_steps, right_expls = _extract(right_tuples)
+        left_steps_v,  left_expls  = _extract(left_tuples)
+        right_steps_v, right_expls = _extract(right_tuples)
 
-        # Mostrar passos: primeiro lado esquerdo, depois lado direito
         cur_left  = left_subst_str
         cur_right = right_subst_str
-        for i, l_after in enumerate(left_steps):
+        for i, l_after in enumerate(left_steps_v):
             expl = left_expls.get(i)
             before = f'{cur_left} = {cur_right}'
             if expl:
@@ -772,7 +948,7 @@ def solve_linear(equation: str):
             if before != after:
                 steps.append(Step(before=before, after=after))
             cur_left = l_after
-        for i, r_after in enumerate(right_steps):
+        for i, r_after in enumerate(right_steps_v):
             expl = right_expls.get(i)
             before = f'{cur_left} = {cur_right}'
             if expl:
@@ -782,38 +958,28 @@ def solve_linear(equation: str):
                 steps.append(Step(before=before, after=after))
             cur_right = r_after
 
-        # Verificação final — usar final_value directamente em vez de parsear
-        # a string LaTeX de cur_left/cur_right, que pode conter \frac, \cdot, etc.
-        # que o sp.sympify não consegue parsear.
         left_orig  = sp.sympify(normalize_expression(left_str.strip()), evaluate=False)
         right_orig = sp.sympify(normalize_expression(right_str.strip()), evaluate=False)
         left_final  = left_orig.subs(x, final_value)
         right_final = right_orig.subs(x, final_value)
 
         is_true = sp.simplify(left_final - right_final) == 0
-
         explanation = "The solution is correct!" if is_true else "The solution does not satisfy the equation."
 
-        steps.append(
-            Step(
-                before=f"{cur_left} = {cur_right}",
-                after=f"{cur_left} = {cur_right}",
-                explanation=explanation
-            )
-        )
+        steps.append(Step(
+            before=f"{cur_left} = {cur_right}",
+            after=f"{cur_left} = {cur_right}",
+            explanation=explanation
+        ))
 
-    # CASO 1: coeficiente já é 1 (ex: x = 3)
+    # ── CASO 1: coeficiente já é 1 ────────────────────────────────────────────
     if coef == 1:
-        steps.append(
-            Step(
-                before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
-                after=f"x = {sp.latex(const)}"
-            )
-        )
-
+        steps.append(Step(
+            before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
+            after=f"x = {sp.latex(const)}"
+        ))
         final_value = const
         final_latex = sp.latex(final_value)
-        # Mostrar aproximação decimal se a solução for fracção
         _dec = _decimal_str(final_value)
         if _dec:
             sol_latex = f'x = {final_latex}'
@@ -824,23 +990,31 @@ def solve_linear(equation: str):
             ))
         _check_solution(final_value, final_latex, equation, steps)
 
-    # CASO 2: precisa dividir ambos os lados pelo coeficiente de x
+    # ── CASO 2: precisa dividir pelo coeficiente ──────────────────────────────
     else:
-        solution = sp.Rational(const, coef)
+        coef_rat  = sp.Rational(coef)
+        const_rat = sp.Rational(const)
 
-        # Para coeficientes inteiros, verificar se há passo intermédio útil
-        # (ex: 4x=-10 -> ÷2 -> 2x=-5 -> ÷2 -> x=-5/2)
-        # Para coeficientes racionais (ex: 5/4), dividir directamente
-        if isinstance(coef, sp.Integer) or (isinstance(coef, sp.Rational) and coef.q == 1):
-            # Coeficiente inteiro — verificar passo intermédio
-            coef_int = int(coef)
-            const_rat = sp.Rational(const)
-            divisor_intermedio = safe_gcd(abs(const_rat), abs(coef))
-            coef_simpl  = coef / divisor_intermedio
+        final_left_latex  = sp.latex(final_left)
+        final_right_latex = sp.latex(final_right)
+
+        # ── CORREÇÃO 2: coeficiente racional com denominador > 1 ─────────────
+        if coef_rat.q > 1:
+            extra_steps, solution = _rational_coef_solve_steps(
+                coef_rat, const_rat,
+                final_left_latex, final_right_latex
+            )
+            steps.extend(extra_steps)
+
+        # ── Coeficiente inteiro (comportamento original) ──────────────────────
+        else:
+            coef_int = int(coef_rat)
+            divisor_intermedio = safe_gcd(abs(const_rat), abs(coef_rat))
+            coef_simpl  = coef_rat  / divisor_intermedio
             const_simpl = const_rat / divisor_intermedio
             mostrar_intermedio = (
                 divisor_intermedio > 1
-                and divisor_intermedio != abs(coef)
+                and divisor_intermedio != abs(coef_rat)
                 and isinstance(coef_simpl, sp.Integer) or (isinstance(coef_simpl, sp.Rational) and coef_simpl.q == 1)
                 and isinstance(const_simpl, sp.Integer) or (isinstance(const_simpl, sp.Rational) and const_simpl.q == 1)
                 and coef_simpl != 1
@@ -849,12 +1023,12 @@ def solve_linear(equation: str):
                 left_int  = coef_simpl * x
                 right_int = const_simpl
                 steps.append(Step(
-                    before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
-                    after=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
+                    before=f"{final_left_latex} = {final_right_latex}",
+                    after=f"{final_left_latex} = {final_right_latex}",
                     explanation=f"Dividir ambos os lados por {sp.latex(divisor_intermedio)}"
                 ))
                 steps.append(Step(
-                    before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
+                    before=f"{final_left_latex} = {final_right_latex}",
                     after=f"{sp.latex(left_int)} = {sp.latex(right_int)}",
                 ))
                 steps.append(Step(
@@ -864,34 +1038,23 @@ def solve_linear(equation: str):
                 ))
                 steps.append(Step(
                     before=f"{sp.latex(left_int)} = {sp.latex(right_int)}",
-                    after=f"x = {sp.latex(solution)}",
+                    after=f"x = {sp.latex(sp.Rational(const_rat, coef_rat))}",
                 ))
             else:
                 steps.append(Step(
-                    before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
-                    after=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
-                    explanation=f"Dividir ambos os lados por {sp.latex(coef)}"
+                    before=f"{final_left_latex} = {final_right_latex}",
+                    after=f"{final_left_latex} = {final_right_latex}",
+                    explanation=f"Dividir ambos os lados por {sp.latex(coef_rat)}"
                 ))
                 steps.append(Step(
-                    before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
-                    after=f"x = {sp.latex(solution)}",
+                    before=f"{final_left_latex} = {final_right_latex}",
+                    after=f"x = {sp.latex(sp.Rational(const_rat, coef_rat))}",
                 ))
-        else:
-            # Coeficiente racional (ex: 5/4 x = 55/6) — dividir directamente
-            steps.append(Step(
-                before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
-                after=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
-                explanation=f"Dividir ambos os lados por {sp.latex(coef)}"
-            ))
-            steps.append(Step(
-                before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
-                after=f"x = {sp.latex(solution)}",
-            ))
+            solution = sp.Rational(const_rat, coef_rat)
 
         final_value = solution
         final_latex = sp.latex(final_value)
 
-        # Mostrar aproximação decimal se a solução for fracção
         _dec = _decimal_str(final_value)
         if _dec:
             sol_latex = f'x = {final_latex}'
