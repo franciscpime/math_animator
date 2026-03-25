@@ -3,7 +3,7 @@ from sympy import lcm
 import re
 from functools import reduce
 from models.step import Step
-from parser.equation_parser import parse_equation, normalize_expression, safe_sympify, fix_implicit_mul
+from parser.equation_parser import parse_equation, normalize_expression, safe_sympify, fix_implicit_mul, detect_decimals, detect_raw_fractions
 from math_utils.mmc import compute_mmc, apply_mmc
 from utils.term_extractor import extract_terms, detailed_multiplication
 from utils.equation_builder import build_equation, render_terms
@@ -247,6 +247,62 @@ def merge_side_steps(left_steps, right_steps, initial_left, initial_right, steps
     return cur_left, cur_right
 
 
+def _decimal_str(solution):
+    """
+    Converte solução racional para string decimal arredondada a 3 casas.
+    Devolve None se for inteiro (não precisa de decimal).
+    """
+    if isinstance(solution, sp.Integer) or (isinstance(solution, sp.Rational) and solution.q == 1):
+        return None
+    val = float(solution)
+    rounded = round(val, 3)
+    if rounded == int(rounded):
+        return str(int(rounded))
+    s = f'{rounded:.3f}'.rstrip('0').rstrip('.')
+    return s
+
+
+def _fraction_simplification_steps(num_str, den_str):
+    """
+    Gera passos de simplificação de fração não reduzida.
+    Ex: '4', '8' -> ['\frac{4}{8}', '\frac{1}{2}']
+    """
+    import math
+    num, den = int(num_str), int(den_str)
+    steps = [r'\frac{' + num_str + r'}{' + den_str + r'}']
+    g = math.gcd(abs(num), den)
+    if g > 1:
+        steps.append(r'\frac{' + str(num // g) + r'}{' + str(den // g) + r'}')
+    return steps
+
+
+def _decimal_simplification_steps(decimal_str):
+    """
+    Gera passos de conversão de decimal para fração.
+    Ex: '0.5' -> ['0.5', '\frac{5}{10}', '\frac{1}{2}']
+         '0.9' -> ['0.9', '\frac{9}{10}']
+    """
+    import math
+    s = decimal_str.replace(',', '.')
+    if '.' not in s:
+        return [s]
+    is_neg = s.startswith('-')
+    s_abs = s.lstrip('-')
+    dec_part = s_abs.split('.')[1]
+    n_dec = len(dec_part)
+    den = 10 ** n_dec
+    num = int(s_abs.replace('.', ''))
+    if is_neg:
+        num = -num
+    frac_unreduced = r'\frac{' + str(num) + r'}{' + str(den) + r'}'
+    steps = [decimal_str, frac_unreduced]
+    g = math.gcd(abs(num), den)
+    if g > 1:
+        frac_reduced = r'\frac{' + str(num // g) + r'}{' + str(den // g) + r'}'
+        steps.append(frac_reduced)
+    return steps
+
+
 # Função principal que resolve equações lineares passo a passo
 def solve_linear(equation: str):
 
@@ -254,6 +310,66 @@ def solve_linear(equation: str):
 
     steps = []
 
+    # Detectar e mostrar passos de simplificação de decimais e frações
+    # antes de começar a resolver
+    _raw_decimals = detect_decimals(equation)
+    _raw_fractions = detect_raw_fractions(equation)
+
+    # Converter a/b para \frac{a}{b} na equação de display desde o início
+    import re as _re_disp
+    def _eq_to_latex_display(eq):
+        return _re_disp.sub(
+            r'(?<!\\\\)(-?\d+)/(\d+)',
+            lambda m: r'\frac{' + m.group(1) + r'}{' + m.group(2) + r'}',
+            eq
+        )
+
+    equation_display = _eq_to_latex_display(equation)
+
+    # Passos: decimal -> fração não reduzida -> fração reduzida
+    current_eq_display = equation_display
+    for dec_str, dec_val in _raw_decimals:
+        dec_steps = _decimal_simplification_steps(dec_str)
+        # dec_steps: ['0.5', '\frac{5}{10}', '\frac{1}{2}']
+        # Substituir passo a passo: dec_steps[i-1] -> dec_steps[i]
+        for i in range(1, len(dec_steps)):
+            before_eq = current_eq_display
+            src = dec_steps[i-1]  # o que está na string actual
+            dst = dec_steps[i]    # o que vai ficar
+            after_eq = before_eq.replace(src, dst, 1)
+            if before_eq != after_eq:
+                steps.append(Step(
+                    before=before_eq,
+                    after=after_eq,
+                    explanation='Converter decimal para fração' if i == 1 else 'Simplificar fração'
+                ))
+                current_eq_display = after_eq
+
+    # Passos: fração não reduzida -> fração reduzida
+    for num_s, den_s, frac_val in _raw_fractions:
+        frac_steps = _fraction_simplification_steps(num_s, den_s)
+        frac_orig_str = num_s + '/' + den_s  # como aparece na equação escrita
+        # Passo 1: mostrar a/b -> \frac{a}{b}
+        if frac_orig_str in current_eq_display:
+            eq_with_frac = current_eq_display.replace(frac_orig_str, frac_steps[0], 1)
+            if eq_with_frac != current_eq_display:
+                steps.append(Step(before=current_eq_display, after=eq_with_frac))
+                current_eq_display = eq_with_frac
+        # Passo 2: simplificar \frac{a}{b} -> \frac{a/g}{b/g} se possível
+        if len(frac_steps) > 1:
+            for i in range(1, len(frac_steps)):
+                before_eq = current_eq_display
+                after_eq  = before_eq.replace(frac_steps[i-1], frac_steps[i], 1)
+                if before_eq != after_eq:
+                    steps.append(Step(
+                        before=before_eq,
+                        after=after_eq,
+                        explanation='Simplificar fração'
+                    ))
+                    current_eq_display = after_eq
+
+    # A partir daqui usar a equação normalizada (com racionais)
+    # O parse_equation já normalizou left e right
     left_terms = extract_terms(left)
     right_terms = extract_terms(right)
 
@@ -282,14 +398,14 @@ def solve_linear(equation: str):
     # num Step próprio antes da mudança visual
     steps.append(
         Step(
-            before=equation,
-            after=equation,
+            before=equation_display,
+            after=equation_display,
             explanation="Organizar termos"
         )
     )
     steps.append(
         Step(
-            before=equation,
+            before=equation_display,
             after=new_eq,
         )
     )
@@ -568,9 +684,18 @@ def solve_linear(equation: str):
         left_sym  = sp.sympify(normalize_expression(left_str.strip()), evaluate=False)
         right_sym = sp.sympify(normalize_expression(right_str.strip()), evaluate=False)
 
-        # Equação original em LaTeX — preservar ordem original dos termos
-        # usando sp.printing.latex com order='none' para não reordenar
-        equation_latex = f"{sp.latex(left_sym, order='none')} = {sp.latex(right_sym, order='none')}"
+        # Construir equation_latex a partir da equação original,
+        # convertendo a/b para \frac{a}{b} mas preservando a ordem
+        import re as _re2
+        def _fracs_to_latex(s):
+            # Substituir a/b por \frac{a}{b}, ignorando casos como x/y onde há letras
+            return _re2.sub(r'(-?\d+)/(\d+)', lambda m: r'\frac{' + m.group(1) + r'}{' + m.group(2) + r'}', s)
+        left_latex_for_display  = _fracs_to_latex(left_str.strip())
+        right_latex_for_display = _fracs_to_latex(right_str.strip())
+        # Normalizar multiplicação implícita para LaTeX (ex: 5/4x -> \frac{5}{4}x)
+        left_latex_for_display  = _re2.sub(r'(\\frac\{\d+\}\{\d+\})(\s*)([a-zA-Z])', r'\1 \3', left_latex_for_display)
+        right_latex_for_display = _re2.sub(r'(\\frac\{\d+\}\{\d+\})(\s*)([a-zA-Z])', r'\1 \3', right_latex_for_display)
+        equation_latex = f"{left_latex_for_display} = {right_latex_for_display}"
 
         steps.append(
             Step(
@@ -589,8 +714,8 @@ def solve_linear(equation: str):
 
         # FIX 4: substituir x na string LaTeX para preservar a ordem original
         # xreplace reordena os args do Add após substituição numérica
-        left_latex_orig  = sp.latex(left_sym, order='none')
-        right_latex_orig = sp.latex(right_sym, order='none')
+        left_latex_orig  = left_latex_for_display
+        right_latex_orig = right_latex_for_display
         val_latex = sp.latex(final_value)
 
         def _sub_x_in_latex(latex_str, val):
@@ -688,58 +813,75 @@ def solve_linear(equation: str):
 
         final_value = const
         final_latex = sp.latex(final_value)
+        # Mostrar aproximação decimal se a solução for fracção
+        _dec = _decimal_str(final_value)
+        if _dec:
+            sol_latex = f'x = {final_latex}'
+            steps.append(Step(
+                before=sol_latex,
+                after=sol_latex,
+                explanation=f'x = {final_latex} \\approx {_dec}'
+            ))
         _check_solution(final_value, final_latex, equation, steps)
 
-    # CASO 2: precisa dividir
+    # CASO 2: precisa dividir ambos os lados pelo coeficiente de x
     else:
         solution = sp.Rational(const, coef)
 
-        # Verificar se a solução simplifica para um inteiro (ex: -10/4 = -5/2)
-        # Só mostrar passo intermédio se o coeficiente simplificado ainda != 1
-        # E se a solução for uma fracção irredutível com denominador > 1
-        divisor_intermedio = safe_gcd(abs(const), abs(coef))
-
-        # Só mostrar passo intermédio quando faz sentido pedagógico:
-        # o coeficiente simplificado é inteiro > 1 e a constante simplificada
-        # também é inteira (ou seja, a divisão intermédia não cria frações)
-        coef_simpl  = sp.Rational(coef,  divisor_intermedio)
-        const_simpl = sp.Rational(const, divisor_intermedio)
-        mostrar_intermedio = (
-            divisor_intermedio > 1
-            and divisor_intermedio != abs(coef)
-            and coef_simpl.q == 1   # coef simplificado é inteiro
-            and const_simpl.q == 1  # constante simplificada é inteira
-            and coef_simpl != 1     # ainda precisa de mais um passo
-        )
-
-        if mostrar_intermedio:
-            left_intermedio  = coef_simpl * x
-            right_intermedio = const_simpl
-            steps.append(Step(
-                before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
-                after=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
-                explanation=f"Dividir ambos os lados por {sp.latex(divisor_intermedio)}"
-            ))
-            steps.append(Step(
-                before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
-                after=f"{sp.latex(left_intermedio)} = {sp.latex(right_intermedio)}",
-            ))
-            steps.append(Step(
-                before=f"{sp.latex(left_intermedio)} = {sp.latex(right_intermedio)}",
-                after=f"{sp.latex(left_intermedio)} = {sp.latex(right_intermedio)}",
-                explanation=f"Dividir ambos os lados por {sp.latex(coef_simpl)}"
-            ))
-            steps.append(Step(
-                before=f"{sp.latex(left_intermedio)} = {sp.latex(right_intermedio)}",
-                after=f"x = {sp.latex(solution)}",
-            ))
+        # Para coeficientes inteiros, verificar se há passo intermédio útil
+        # (ex: 4x=-10 -> ÷2 -> 2x=-5 -> ÷2 -> x=-5/2)
+        # Para coeficientes racionais (ex: 5/4), dividir directamente
+        if isinstance(coef, sp.Integer) or (isinstance(coef, sp.Rational) and coef.q == 1):
+            # Coeficiente inteiro — verificar passo intermédio
+            coef_int = int(coef)
+            const_rat = sp.Rational(const)
+            divisor_intermedio = safe_gcd(abs(const_rat), abs(coef))
+            coef_simpl  = coef / divisor_intermedio
+            const_simpl = const_rat / divisor_intermedio
+            mostrar_intermedio = (
+                divisor_intermedio > 1
+                and divisor_intermedio != abs(coef)
+                and isinstance(coef_simpl, sp.Integer) or (isinstance(coef_simpl, sp.Rational) and coef_simpl.q == 1)
+                and isinstance(const_simpl, sp.Integer) or (isinstance(const_simpl, sp.Rational) and const_simpl.q == 1)
+                and coef_simpl != 1
+            )
+            if mostrar_intermedio:
+                left_int  = coef_simpl * x
+                right_int = const_simpl
+                steps.append(Step(
+                    before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
+                    after=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
+                    explanation=f"Dividir ambos os lados por {sp.latex(divisor_intermedio)}"
+                ))
+                steps.append(Step(
+                    before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
+                    after=f"{sp.latex(left_int)} = {sp.latex(right_int)}",
+                ))
+                steps.append(Step(
+                    before=f"{sp.latex(left_int)} = {sp.latex(right_int)}",
+                    after=f"{sp.latex(left_int)} = {sp.latex(right_int)}",
+                    explanation=f"Dividir ambos os lados por {sp.latex(coef_simpl)}"
+                ))
+                steps.append(Step(
+                    before=f"{sp.latex(left_int)} = {sp.latex(right_int)}",
+                    after=f"x = {sp.latex(solution)}",
+                ))
+            else:
+                steps.append(Step(
+                    before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
+                    after=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
+                    explanation=f"Dividir ambos os lados por {sp.latex(coef)}"
+                ))
+                steps.append(Step(
+                    before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
+                    after=f"x = {sp.latex(solution)}",
+                ))
         else:
-            # Divisão directa — mostrar coeficiente simplificado se possível
-            divisor_display = divisor_intermedio if divisor_intermedio == abs(coef) else abs(coef)
+            # Coeficiente racional (ex: 5/4 x = 55/6) — dividir directamente
             steps.append(Step(
                 before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
                 after=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
-                explanation=f"Dividir ambos os lados por {sp.latex(sp.Integer(divisor_display))}"
+                explanation=f"Dividir ambos os lados por {sp.latex(coef)}"
             ))
             steps.append(Step(
                 before=f"{sp.latex(final_left)} = {sp.latex(final_right)}",
@@ -749,7 +891,18 @@ def solve_linear(equation: str):
         final_value = solution
         final_latex = sp.latex(final_value)
 
+        # Mostrar aproximação decimal se a solução for fracção
+        _dec = _decimal_str(final_value)
+        if _dec:
+            sol_latex = f'x = {final_latex}'
+            steps.append(Step(
+                before=sol_latex,
+                after=sol_latex,
+                explanation=f'x = {final_latex} \\approx {_dec}'
+            ))
+
         _check_solution(final_value, final_latex, equation, steps)
 
     return steps
+
 

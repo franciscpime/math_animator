@@ -19,6 +19,8 @@ class EquationRenderer:
 
     def _make_tex(self, latex_str: str) -> MathTex:
         """Cria um MathTex redimensionado para caber no ecrã."""
+        # Normalizar espaços duplos que podem vir do build_equation
+        latex_str = re.sub(r'  +', ' ', latex_str)
         tex = MathTex(latex_str)
         # Escalar para caber na largura do ecrã com margem
         max_width  = config.frame_width  * 0.9
@@ -65,10 +67,16 @@ class EquationRenderer:
                     self.scene.play(FadeIn(self.tex))
                     self.scene.wait(0.5)
                 else:
-                    explanation = Tex(explanation_text).scale(0.9)
+                    # Se a explicação contém só LaTeX (ex: x = 1/2 ≈ 0.5),
+                    # usar MathTex em vez de Tex
+                    if re.search(r'\\approx|\\frac', step.explanation):
+                        explanation = self._make_tex(step.explanation).scale(0.7)
+                    else:
+                        explanation = Tex(explanation_text).scale(0.9)
                     explanation.next_to(self.tex, DOWN)
                     self.scene.play(Write(explanation))
-                    self.scene.wait(1)
+                    self.scene.wait(1.5)
                     self.scene.play(FadeOut(explanation))
                     self.scene.wait(1)
-                    
+
+
