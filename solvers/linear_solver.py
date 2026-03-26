@@ -690,8 +690,8 @@ def solve_linear(equation: str):
             after_m  = cur[m.end():]
 
             # Sempre mostrar \cdot, com parênteses se val_num < 0
-            val_num_str = f"({val_num})" if val_num < 0 else str(val_num)
-            frac_prod = r'\frac{' + str(coef_v) + r' \cdot ' + val_num_str + r'}{' + str(val_den) + r'}'
+            value_num_str = f"({val_num})" if val_num < 0 else str(val_num)
+            frac_prod = r'\frac{' + str(coef_v) + r' \cdot ' + value_num_str + r'}{' + str(val_den) + r'}'
             s1 = _fix_pm(before_m + frac_prod + after_m)
             if s1 != cur: result.append((s1, None)); cur = s1
 
@@ -731,8 +731,8 @@ def solve_linear(equation: str):
             before_m = cur[:m.start()]
             after_m  = cur[m.end():]
 
-            val_num_str = f"({val_num})" if val_num < 0 else str(val_num)
-            frac_prod2 = r'\frac{' + str(fa) + r' \cdot ' + val_num_str + r'}{' + str(fb) + r' \cdot ' + str(val_den) + r'}'
+            value_num_str = f"({val_num})" if val_num < 0 else str(val_num)
+            frac_prod2 = r'\frac{' + str(fa) + r' \cdot ' + value_num_str + r'}{' + str(fb) + r' \cdot ' + str(val_den) + r'}'
             s1 = _fix_pm(before_m + frac_prod2 + after_m)
             if s1 != cur: result.append((s1, None)); cur = s1
 
@@ -887,13 +887,15 @@ def solve_linear(equation: str):
         right_latex_for_display = _re2.sub(r'(\\frac\{\d+\}\{\d+\})(\s*)([a-zA-Z])', r'\1 \3', right_latex_for_display)
         equation_latex = f"{left_latex_for_display} = {right_latex_for_display}"
 
+
         steps.append(Step(
             before=equation_latex,
-            after=equation_latex,
+            after="",
             explanation="Vamos verificar!"
         ))
+
         steps.append(Step(
-            before=equation_latex,
+            before="",
             after=equation_latex,
             explanation=f"Agora vamos substituir x por {final_latex}"
         ))
