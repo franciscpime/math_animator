@@ -690,8 +690,8 @@ def solve_linear(equation: str):
             after_m  = cur[m.end():]
 
             # Sempre mostrar \cdot, com parênteses se val_num < 0
-            value_num_str = f"({val_num})" if val_num < 0 else str(val_num)
-            frac_prod = r'\frac{' + str(coef_v) + r' \cdot ' + value_num_str + r'}{' + str(val_den) + r'}'
+            val_num_str = f"({val_num})" if val_num < 0 else str(val_num)
+            frac_prod = r'\frac{' + str(coef_v) + r' \cdot ' + val_num_str + r'}{' + str(val_den) + r'}'
             s1 = _fix_pm(before_m + frac_prod + after_m)
             if s1 != cur: result.append((s1, None)); cur = s1
 
@@ -731,8 +731,8 @@ def solve_linear(equation: str):
             before_m = cur[:m.start()]
             after_m  = cur[m.end():]
 
-            value_num_str = f"({val_num})" if val_num < 0 else str(val_num)
-            frac_prod2 = r'\frac{' + str(fa) + r' \cdot ' + value_num_str + r'}{' + str(fb) + r' \cdot ' + str(val_den) + r'}'
+            val_num_str = f"({val_num})" if val_num < 0 else str(val_num)
+            frac_prod2 = r'\frac{' + str(fa) + r' \cdot ' + val_num_str + r'}{' + str(fb) + r' \cdot ' + str(val_den) + r'}'
             s1 = _fix_pm(before_m + frac_prod2 + after_m)
             if s1 != cur: result.append((s1, None)); cur = s1
 
@@ -751,6 +751,27 @@ def solve_linear(equation: str):
                     if s2 != cur: result.append((s2, None)); cur = s2
                     s3 = _fix_pm(cur.replace(frac_eval2, frac_simp2, 1))
                     if s3 != cur: result.append((s3, None)); cur = s3
+
+        # Passo 1c: simplificar frações constantes positivas não reduzidas ainda presentes
+        # ex: \frac{6}{4} → \frac{3}{2}
+        # Só frações com numerador positivo e que realmente simplificam
+        import math as _math_gc
+        pat_const_frac = r'\\frac\{(\d+)\}\{(\d+)\}'
+        for _ in range(20):
+            found_any = False
+            for m in _re.finditer(pat_const_frac, cur):
+                fn, fd = int(m.group(1)), int(m.group(2))
+                g = _math_gc.gcd(fn, fd)
+                if g > 1:
+                    frac_orig = r'\frac{' + str(fn) + r'}{' + str(fd) + r'}'
+                    frac_simp = r'\frac{' + str(fn//g) + r'}{' + str(fd//g) + r'}' if fd//g > 1 else str(fn//g)
+                    novo = _fix_pm(cur.replace(frac_orig, frac_simp, 1))
+                    if novo != cur:
+                        result.append((novo, None)); cur = novo
+                        found_any = True
+                        break
+            if not found_any:
+                break
 
         # Passo 2: converter inteiros isolados para o denominador comum das frações presentes
         def _find_isolated_ints(s):
@@ -887,15 +908,13 @@ def solve_linear(equation: str):
         right_latex_for_display = _re2.sub(r'(\\frac\{\d+\}\{\d+\})(\s*)([a-zA-Z])', r'\1 \3', right_latex_for_display)
         equation_latex = f"{left_latex_for_display} = {right_latex_for_display}"
 
-
         steps.append(Step(
             before=equation_latex,
-            after="",
+            after=equation_latex,
             explanation="Vamos verificar!"
         ))
-
         steps.append(Step(
-            before="",
+            before=equation_latex,
             after=equation_latex,
             explanation=f"Agora vamos substituir x por {final_latex}"
         ))
@@ -1043,6 +1062,11 @@ def solve_linear(equation: str):
                     after=f"x = {sp.latex(sp.Rational(const_rat, coef_rat))}",
                 ))
             else:
+                solution = sp.Rational(const_rat, coef_rat)
+                # Mostrar x = const/coef não simplificado, depois simplificar
+                # ex: 15x = 3  →  x = 3/15  →  x = 1/5
+                frac_unsimplified = r'\frac{' + str(int(const_rat)) + r'}{' + str(int(coef_rat)) + r'}'
+                frac_simplified   = sp.latex(solution)
                 steps.append(Step(
                     before=f"{final_left_latex} = {final_right_latex}",
                     after=f"{final_left_latex} = {final_right_latex}",
@@ -1050,8 +1074,13 @@ def solve_linear(equation: str):
                 ))
                 steps.append(Step(
                     before=f"{final_left_latex} = {final_right_latex}",
-                    after=f"x = {sp.latex(sp.Rational(const_rat, coef_rat))}",
+                    after=f"x = {frac_unsimplified}",
                 ))
+                if frac_simplified != frac_unsimplified:
+                    steps.append(Step(
+                        before=f"x = {frac_unsimplified}",
+                        after=f"x = {frac_simplified}",
+                    ))
             solution = sp.Rational(const_rat, coef_rat)
 
         final_value = solution
