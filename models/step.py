@@ -4,4 +4,4 @@ from dataclasses import dataclass
 class Step:
     before: str
     after: str
-    explanation: str = ""
+    explanation: str = "" 

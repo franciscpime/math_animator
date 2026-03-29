@@ -57,3 +57,4 @@ def dispatch_solver(
         )
  
     raise ValueError(f"Unsupported equation degree: {degree}")
+
