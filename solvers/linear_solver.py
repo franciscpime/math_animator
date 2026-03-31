@@ -1035,9 +1035,17 @@ def solve_linear(equation: str):
                     current_expression = expr_with_evaluated_numerator
 
             elif simplification_is_integer:
-                # Numerator and denominator cancel completely; jump to integer.
+                # Show the evaluated numerator first, then jump to integer.
+                expr_with_evaluated_numerator = _fix_pm(
+                    current_expression.replace(frac_multiplication, numerator_evaluated, 1)
+                )
+
+                if expr_with_evaluated_numerator != current_expression:
+                    result.append((expr_with_evaluated_numerator, None))
+                    current_expression = expr_with_evaluated_numerator
+
                 final_reduced_expr = _fix_pm(
-                    current_expression.replace(frac_multiplication, fraction_reduced, 1)
+                    current_expression.replace(numerator_evaluated, fraction_reduced, 1)
                 )
 
                 if final_reduced_expr != current_expression:
@@ -1623,12 +1631,10 @@ def solve_linear(equation: str):
         decimal_approximation = _decimal_str(final_value)
 
         if decimal_approximation:
-            solution_str = f"x = {final_latex}"
-
             steps.append(
                 Step(
-                    before=solution_str, after=solution_str,
-                    explanation=f"x = {final_latex} \\approx {decimal_approximation}",
+                    before=f"x = {final_latex}",
+                    after=f"x = {final_latex} \\approx {decimal_approximation}",
                 )
             )
 
@@ -1743,11 +1749,10 @@ def solve_linear(equation: str):
         decimal_approximation = _decimal_str(final_value)
         
         if decimal_approximation:
-            solution_str = f"x = {final_latex}"
             steps.append(
                 Step(
-                    before=solution_str, after=solution_str,
-                    explanation=f"x = {final_latex} \\approx {decimal_approximation}",
+                    before=f"x = {final_latex}",
+                    after=f"x = {final_latex} \\approx {decimal_approximation}",
                 )
             )
 
