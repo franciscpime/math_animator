@@ -44,20 +44,19 @@ def _frac_x_latex(numerator, denominator):
       _frac_x_latex(10, 1)  >> '10 x'
     """
     if denominator == 1:
-        if numerator == 1:  
+        if numerator == 1:
             return "x"
-        if numerator == -1: 
+        if numerator == -1:
             return "- x"
-        
         return f"{numerator} x"
-    
-    if numerator == 1:  
+
+    if numerator == 1:
         return fr"\frac{{x}}{{{denominator}}}"
-    if numerator == -1: 
+    if numerator == -1:
         return fr"- \frac{{x}}{{{denominator}}}"
     if numerator < 0:
         return fr"- \frac{{{abs(numerator)} x}}{{{denominator}}}"
-    
+
     return fr"\frac{{{numerator} x}}{{{denominator}}}"
 
 
@@ -71,11 +70,11 @@ def _frac_latex(numerator, denominator):
       _frac_latex(-9, 2)   >> '- \\frac{9}{2}'
       _frac_latex(8, 1)    >> '8'
     """
-    if denominator == 1: 
+    if denominator == 1:
         return str(numerator)
-    if numerator < 0:  
+    if numerator < 0:
         return fr"- \frac{{{abs(numerator)}}}{{{denominator}}}"
-        
+
     return fr"\frac{{{numerator}}}{{{denominator}}}"
 
 
@@ -150,43 +149,43 @@ def combine_terms_stepwise(terms):
         for term in x_terms:
             coefs.append(sp.Rational(term.coeff(x)))
 
-        dens = []
+        denominators = []
         for coef in coefs:
-            dens.append(coef.q)
+            denominators.append(coef.q)
 
-        common_denominator = _freduce(_mlcm, dens)
+        common_denominator = _freduce(_mlcm, denominators)
 
         all_same = True
-        for d in dens:
-            if d != common_denominator:
+        for denominator in denominators:
+            if denominator != common_denominator:
                 all_same = False
                 break
 
         if not all_same:
             # Step A: rewrite every term with the common denominator.
-            ns = []
-            for c in coefs:
-                n = c.p * (common_denominator // c.q)
-                ns.append(n)
+            adjusted_numerators = []
+            for coefficient in coefs:
+                adjusted_numerator = coefficient.p * (common_denominator // coefficient.q)
+                adjusted_numerators.append(adjusted_numerator)
 
             parts_a = []
-            for n in ns:
-                parts_a.append(_frac_x_latex(n, common_denominator))
+            for adjusted_numerator in adjusted_numerators:
+                parts_a.append(_frac_x_latex(adjusted_numerator, common_denominator))
 
             steps.append(("__latex__", _join_latex(parts_a), new_terms.copy()))
         else:
-            ns = []
-            for c in coefs:
-                ns.append(c.p)
+            adjusted_numerators = []
+            for coefficient in coefs:
+                adjusted_numerators.append(coefficient.p)
 
         # Step B: group all numerators under the common denominator
         sum_num = 0
-        for n in ns:
-            sum_num += n
+        for adjusted_numerator in adjusted_numerators:
+            sum_num += adjusted_numerator
 
         num_parts = []
-        for n in ns:
-            num_parts.append(str(n))
+        for adjusted_numerator in adjusted_numerators:
+            num_parts.append(str(adjusted_numerator))
 
         num_expr = " + ".join(num_parts)
         num_expr = re.sub(r'\+\s*-', '- ', num_expr)
@@ -200,12 +199,11 @@ def combine_terms_stepwise(terms):
             steps.append(("__latex__", latex_b, new_terms.copy()))
 
         # Step C: emit the final combined term
-
         combined = sp.Rational(sum_num, common_denominator) * x
 
         new_terms = [combined]
-        for t in const_terms:
-            new_terms.append(t)
+        for const_term in const_terms:
+            new_terms.append(const_term)
 
         steps.append(new_terms.copy())
 
@@ -214,12 +212,12 @@ def combine_terms_stepwise(terms):
     # ------------------------------------------------------------------
     elif len(const_terms) > 1:
         coefs_c = []
-        for t in const_terms:
-            coefs_c.append(sp.Rational(t))
+        for const_term in const_terms:
+            coefs_c.append(sp.Rational(const_term))
 
         dens_c = []
-        for c in coefs_c:
-            dens_c.append(c.q)
+        for coef_c in coefs_c:
+            dens_c.append(coef_c.q)
 
         den_comum_c = _freduce(_mlcm, dens_c)
 
@@ -232,28 +230,28 @@ def combine_terms_stepwise(terms):
         if not all_same_c:
             # Step A: rewrite every constant with the common denominator.
             ns_c = []
-            for c in coefs_c:
-                n = c.p * (den_comum_c // c.q)
-                ns_c.append(n)
+            for coef_c in coefs_c:
+                adjusted_numerator = coef_c.p * (den_comum_c // coef_c.q)
+                ns_c.append(adjusted_numerator)
 
             parts_a = []
-            for n in ns_c:
-                parts_a.append(_frac_latex(n, den_comum_c))
+            for adjusted_numerator in ns_c:
+                parts_a.append(_frac_latex(adjusted_numerator, den_comum_c))
 
             steps.append(("__latex__", _join_latex(parts_a), new_terms.copy()))
         else:
             ns_c = []
-            for c in coefs_c:
-                ns_c.append(c.p)
+            for coef_c in coefs_c:
+                ns_c.append(coef_c.p)
 
         # Step B: group numerators
         sum_num_c = 0
-        for n in ns_c:
-            sum_num_c += n
+        for numerator in ns_c:
+            sum_num_c += numerator
 
         num_parts_c = []
-        for n in ns_c:
-            num_parts_c.append(str(n))
+        for numerator in ns_c:
+            num_parts_c.append(str(numerator))
 
         num_expr_c = " + ".join(num_parts_c)
         num_expr_c = re.sub(r'\+\s*-', '- ', num_expr_c)
@@ -313,28 +311,28 @@ def common_divisor_of_constants(terms):
     """
     if not terms:
         return sp.Integer(1)
-    
-    rats = []
-    for t in terms:
-        rats.append(sp.Rational(t))
 
-    denoms = []
-    for r in rats:
-        denoms.append(r.q)
+    rationals = []
+    for term in terms:
+        rationals.append(sp.Rational(term))
 
-    if denoms:
-        mmc = lcm(*denoms)
+    denominators = []
+    for rational in rationals:
+        denominators.append(rational.q)
+
+    if denominators:
+        mmc = lcm(*denominators)
     else:
         mmc = 1
 
-    nums = []
-    for r in rats:
-        nums.append(int(r * mmc))
+    numerators_multiplied_lmc = []
+    for rational in rationals:
+        numerators_multiplied_lmc.append(int(rational * mmc))
 
-    if nums:
+    if numerators_multiplied_lmc:
         nums_int = []
-        for n in nums:
-            nums_int.append(sp.Integer(n))
+        for numerator_multiplied_lmc in numerators_multiplied_lmc:
+            nums_int.append(sp.Integer(numerator_multiplied_lmc))
 
         gcd_nums = abs(reduce(sp.gcd, nums_int))
     else:
@@ -352,13 +350,13 @@ def _decimal_str(solution):
         isinstance(solution, sp.Rational) and solution.q == 1
     ):
         return None
-    
-    val = float(solution)
-    rounded = round(val, 3)
+
+    decimal_value = float(solution)
+    rounded = round(decimal_value, 3)
 
     if rounded == int(rounded):
         return str(int(rounded))
-    
+
     return f"{rounded:.3f}".rstrip("0").rstrip(".")
 
 
@@ -376,13 +374,14 @@ def _fraction_simplification_steps(num_str, den_str):
       _fraction_simplification_steps('6', '4')
       >> ['\\frac{6}{4}', '\\frac{3}{2}']
     """
-    num, den = int(num_str), int(den_str)
+    numerator = int(num_str)
+    denominator = int(den_str)
 
     steps = [r"\frac{" + num_str + r"}{" + den_str + r"}"]
-    g = math.gcd(abs(num), den)
+    common_divisor = math.gcd(abs(numerator), denominator)
 
-    if g > 1:
-        steps.append(r"\frac{" + str(num // g) + r"}{" + str(den // g) + r"}")
+    if common_divisor > 1:
+        steps.append(r"\frac{" + str(numerator // common_divisor) + r"}{" + str(denominator // common_divisor) + r"}")
 
     return steps
 
@@ -396,28 +395,28 @@ def _decimal_simplification_steps(decimal_str):
       _decimal_simplification_steps('0.5')
       >> ['0.5', '\\frac{5}{10}', '\\frac{1}{2}']
     """
-    s = decimal_str.replace(",", ".")
+    decimal_normalized = decimal_str.replace(",", ".")
 
-    if "." not in s:
-        return [s]
-    
-    is_neg = s.startswith("-")
-    s_abs  = s.lstrip("-")
-    n_dec = len(s_abs.split(".")[1])
-    den = 10 ** n_dec
-    num = int(s_abs.replace(".", ""))
+    if "." not in decimal_normalized:
+        return [decimal_normalized]
 
-    if is_neg:
-        num = -num
+    is_negative = decimal_normalized.startswith("-")
+    decimal_abs = decimal_normalized.lstrip("-")
+    decimal_places = len(decimal_abs.split(".")[1])
+    denominator = 10 ** decimal_places
+    numerator = int(decimal_abs.replace(".", ""))
 
-    frac_unreduced = r"\frac{" + str(num) + r"}{" + str(den) + r"}"
+    if is_negative:
+        numerator = -numerator
+
+    frac_unreduced = r"\frac{" + str(numerator) + r"}{" + str(denominator) + r"}"
 
     steps = [decimal_str, frac_unreduced]
 
-    g = math.gcd(abs(num), den)
+    common_divisor = math.gcd(abs(numerator), denominator)
 
-    if g > 1:
-        steps.append(r"\frac{" + str(num // g) + r"}{" + str(den // g) + r"}")
+    if common_divisor > 1:
+        steps.append(r"\frac{" + str(numerator // common_divisor) + r"}{" + str(denominator // common_divisor) + r"}")
     return steps
 
 
@@ -426,9 +425,9 @@ def _decimal_simplification_steps(decimal_str):
 # =============================================================================
 
 def _rational_coef_solve_steps(
-        coef_rational, 
-        const_rational, 
-        final_left_latex, 
+        coef_rational,
+        const_rational,
+        final_left_latex,
         final_right_latex
     ):
     """
@@ -459,9 +458,9 @@ def _rational_coef_solve_steps(
     """
     result_steps = []
 
-    coef_numerator = coef_rational.p   # numerator   of the coefficient (may be negative)
-    coef_denominator = coef_rational.q   # denominator of the coefficient (always positive)
-    right_side_constant = const_rational    # right-hand side as a Rational
+    coef_numerator = coef_rational.p
+    coef_denominator = coef_rational.q
+    right_side_constant = const_rational
 
     eq_before_multiply = f"{final_left_latex} = {final_right_latex}"
 
@@ -496,7 +495,7 @@ def _rational_coef_solve_steps(
 
     result_steps.append(
         Step(
-            before=eq_before_multiply, 
+            before=eq_before_multiply,
             after=eq_after_multiply_unevaluated
         )
     )
@@ -514,7 +513,7 @@ def _rational_coef_solve_steps(
     if eq_after_multiply_evaluated != eq_after_multiply_unevaluated:
         result_steps.append(
             Step(
-                before=eq_after_multiply_unevaluated, 
+                before=eq_after_multiply_unevaluated,
                 after=eq_after_multiply_evaluated
             )
         )
@@ -541,7 +540,7 @@ def _rational_coef_solve_steps(
 
     result_steps.append(
         Step(
-            before=eq_after_multiply_evaluated, 
+            before=eq_after_multiply_evaluated,
             after=eq_after_divide_unevaluated
         )
     )
@@ -551,7 +550,7 @@ def _rational_coef_solve_steps(
     if eq_solution_simplified != eq_after_divide_unevaluated:
         result_steps.append(
             Step(
-                before=eq_after_divide_unevaluated, 
+                before=eq_after_divide_unevaluated,
                 after=eq_solution_simplified
             )
         )
@@ -633,7 +632,6 @@ def solve_linear(equation: str):
             eq_with_frac = current_eq_display.replace(frac_orig_str, frac_steps[0], 1)
 
             if eq_with_frac != current_eq_display:
-
                 steps.append(
                     Step(
                         before=current_eq_display,
@@ -665,35 +663,35 @@ def solve_linear(equation: str):
     left_x,  left_const  = [], []
     right_x, right_const = [], []
 
-    for t in left_terms:
-        if t.has(x):
-            left_x.append(t)
+    for term in left_terms:
+        if term.has(x):
+            left_x.append(term)
         else:
-            left_const.append(t)
+            left_const.append(term)
 
-    for t in right_terms:
-        if t.has(x):
-            right_x.append(t)
+    for term in right_terms:
+        if term.has(x):
+            right_x.append(term)
         else:
-            right_const.append(t)
+            right_const.append(term)
 
     # Variable terms stay on the left; right-side variables are negated.
     # Constants move to the right; left-side constants are negated.
     variable_terms = []
 
-    for t in left_x:
-        variable_terms.append(t)
+    for term in left_x:
+        variable_terms.append(term)
 
-    for t in right_x:
-        variable_terms.append(-t)
+    for term in right_x:
+        variable_terms.append(-term)
 
     constant_terms = []
 
-    for t in right_const:
-        constant_terms.append(t)
+    for term in right_const:
+        constant_terms.append(term)
 
-    for t in left_const:
-        constant_terms.append(-t)
+    for term in left_const:
+        constant_terms.append(-term)
 
     new_eq = build_equation(variable_terms, constant_terms)
 
@@ -717,7 +715,7 @@ def solve_linear(equation: str):
     if len(variable_terms) > 1:
         steps.append(
             Step(
-                before=new_eq, 
+                before=new_eq,
                 after=new_eq,
                 explanation="Simplify the variable side",
             )
@@ -798,7 +796,7 @@ def solve_linear(equation: str):
     # ==================================================================
     # INNER FUNCTION: _sympy_stepwise
     # ==================================================================
-    def _sympy_stepwise(subst_str, sym_evaled, final_value):
+    def _sympy_stepwise(substituted_expression, sym_evaled, final_value):
         """
         Generate a list of (latex_str, explanation_or_None) tuples that walk
         through the arithmetic after substituting x = final_value.
@@ -834,14 +832,14 @@ def solve_linear(equation: str):
         from math import lcm as _mlcm
         from functools import reduce as _freduce
 
-        def _fix_pm(s):
+        def _fix_pm(expression):
             """Normalise double negatives and plus-minus combinations."""
-            s = _re.sub(r"-\s*-\s*", "+ ", s)
-            s = _re.sub(r"\+\s*-\s*", "- ", s)
-            return s.strip()
+            expression = _re.sub(r"-\s*-\s*", "+ ", expression)
+            expression = _re.sub(r"\+\s*-\s*", "- ", expression)
+            return expression.strip()
 
-        result = [(subst_str, None)]
-        cur = subst_str
+        result = [(substituted_expression, None)]
+        current_expression = substituted_expression
 
         # --------------------------------------------------------------
         # Integer solution path
@@ -853,52 +851,59 @@ def solve_linear(equation: str):
 
             # Evaluate each product k*(integer) in the expression.
             pattern = r"(-?\s*\d+)\s*\(\s*" + solution_latex_escaped + r"\s*\)"
-            
+
             for _ in range(20):
-                m = _re.search(pattern, cur)
+                pattern_match = _re.search(pattern, current_expression)
 
-                if not m: 
+                if not pattern_match:
                     break
 
-                term_coefficient = int(m.group(1).replace(" ", ""))
-                prod = term_coefficient * solution_as_int
-                before_m = cur[:m.start()]
-                after_m = cur[m.end():]
-                prod_str = str(prod)
+                term_coefficient = int(pattern_match.group(1).replace(" ", ""))
+                product = term_coefficient * solution_as_int
+                before_match = current_expression[:pattern_match.start()]
+                after_match = current_expression[pattern_match.end():]
+                product_string = str(product)
 
-                if before_m.rstrip() and before_m.rstrip()[-1] not in "+-=(,":
-                    prod_str = ("+ " if prod >= 0 else "- ") + str(abs(prod))
-                    before_m = _fix_pm(before_m + prod_str)
-                s1 = _fix_pm(before_m + after_m)
+                # FIX Bug 2: build updated_expression in a single operation,
+                # never overwriting before_match (which is needed unchanged).
+                if before_match.rstrip() and before_match.rstrip()[-1] not in "+-=(,":
+                    product_string = ("+ " if product >= 0 else "- ") + str(abs(product))
 
-                if s1 == cur: 
+                updated_expression = _fix_pm(before_match + product_string + after_match)
+
+                if updated_expression == current_expression:
                     break
 
-                result.append((s1, None)); cur = s1
+                result.append((updated_expression, None))
+                current_expression = updated_expression
 
             # Sum pairs of integers until a single number remains.
-            final_str = sp.latex(sp.simplify(sym_evaled))
+            final_expression = sp.latex(sp.simplify(sym_evaled))
 
             for _ in range(20):
-                m = _re.search(r"(-?\d+)\s*([+-])\s*(\d+)", cur)
-                
-                if not m: 
+                pattern_match = _re.search(r"(-?\d+)\s*([+-])\s*(\d+)", current_expression)
+
+                if not pattern_match:
                     break
 
-                a, op, b = int(m.group(1)), m.group(2), int(m.group(3))
-                soma = a + b if op == "+" else a - b
-                novo = _fix_pm(cur[:m.start()] + str(soma) + cur[m.end():])
+                first_number = int(pattern_match.group(1))
+                arithmetic_operator = pattern_match.group(2)
+                second_number = int(pattern_match.group(3))
 
-                if novo == cur: 
+                soma = first_number + second_number if arithmetic_operator == "+" else first_number - second_number
+                new_expression = _fix_pm(current_expression[:pattern_match.start()] + str(soma) + current_expression[pattern_match.end():])
+
+                if new_expression == current_expression:
                     break
 
-                result.append((novo, None)); cur = novo
+                result.append((new_expression, None))
+                current_expression = new_expression
 
-                if cur == final_str: 
+                if current_expression == final_expression:
                     break
 
-            if cur != final_str:
-                result.append((final_str, None))
+            if current_expression != final_expression:
+                result.append((final_expression, None))
             return result
 
         # --------------------------------------------------------------
@@ -916,29 +921,30 @@ def solve_linear(equation: str):
             solution_numerator_str = str(solution_numerator)
 
         # Step 1a: integer_coef * (p/q).
-        pat_coef_frac = r"(-?\s*\d+)\s*\(\s*" + solution_latex_escaped + r"\s*\)"
+        int_times_frac_pattern = r"(-?\s*\d+)\s*\(\s*" + solution_latex_escaped + r"\s*\)"
 
         for _ in range(20):
-            m = _re.search(pat_coef_frac, cur)
+            pattern_match = _re.search(int_times_frac_pattern, current_expression)
 
-            if not m: 
+            if not pattern_match:
                 break
 
-            term_coefficient = int(m.group(1).replace(" ", ""))
+            term_coefficient = int(pattern_match.group(1).replace(" ", ""))
             numerator_product = term_coefficient * solution_numerator
-            before_m = cur[:m.start()]
-            after_m = cur[m.end():]
+            before_match = current_expression[:pattern_match.start()]
+            after_match = current_expression[pattern_match.end():]
 
             # Always show the multiplication symbol explicitly.
-            frac_prod = (
+            frac_multiplication = (
                 r"\frac{" + str(term_coefficient) + r" \cdot " + solution_numerator_str
                 + r"}{" + str(solution_denominator) + r"}"
             )
 
-            s1 = _fix_pm(before_m + frac_prod + after_m)
+            expr_with_multiplication = _fix_pm(before_match + frac_multiplication + after_match)
 
-            if s1 != cur: 
-                result.append((s1, None)); cur = s1
+            if expr_with_multiplication != current_expression:
+                result.append((expr_with_multiplication, None))
+                current_expression = expr_with_multiplication
 
             numerator_evaluated = r"\frac{" + str(numerator_product) + r"}{" + str(solution_denominator) + r"}"
             fraction_reduced = sp.latex(sp.Rational(numerator_product, solution_denominator))
@@ -946,217 +952,269 @@ def solve_linear(equation: str):
 
             if fraction_reduced == numerator_evaluated:
                 # Already in lowest terms; show the evaluated form and stop.
-                s2 = _fix_pm(cur.replace(frac_prod, numerator_evaluated, 1))
+                expr_with_evaluated_numerator = _fix_pm(current_expression.replace(frac_multiplication, numerator_evaluated, 1))
 
-                if s2 != cur: 
-                    result.append((s2, None)); cur = s2
+                if expr_with_evaluated_numerator != current_expression:
+                    result.append((expr_with_evaluated_numerator, None))
+                    current_expression = expr_with_evaluated_numerator
             elif simplification_is_integer:
                 # Numerator and denominator cancel completely; jump to integer.
-                s3 = _fix_pm(cur.replace(frac_prod, fraction_reduced, 1))
+                final_reduced_expr = _fix_pm(current_expression.replace(frac_multiplication, fraction_reduced, 1))
 
-                if s3 != cur: 
-                    result.append((s3, None)); cur = s3
+                if final_reduced_expr != current_expression:
+                    result.append((final_reduced_expr, None))
+                    current_expression = final_reduced_expr
             else:
                 # Show the evaluated numerator first, then reduce the fraction.
-                s2 = _fix_pm(cur.replace(frac_prod, numerator_evaluated, 1))
+                expr_with_evaluated_numerator = _fix_pm(current_expression.replace(frac_multiplication, numerator_evaluated, 1))
 
-                if s2 != cur: 
-                    result.append((s2, None)); cur = s2
+                if expr_with_evaluated_numerator != current_expression:
+                    result.append((expr_with_evaluated_numerator, None))
+                    current_expression = expr_with_evaluated_numerator
 
-                s3 = _fix_pm(cur.replace(numerator_evaluated, fraction_reduced, 1))
+                final_reduced_expr = _fix_pm(current_expression.replace(numerator_evaluated, fraction_reduced, 1))
 
-                if s3 != cur: 
-                    result.append((s3, None)); cur = s3
+                if final_reduced_expr != current_expression:
+                    result.append((final_reduced_expr, None))
+                    current_expression = final_reduced_expr
 
         # Step 1b: frac_coef * (p/q).
-        pat_frac_frac = r"\\frac\{(\d+)\}\{(\d+)\}\s*\(\s*" + solution_latex_escaped + r"\s*\)"
+        fraction_times_fraction_pattern = r"\\frac\{(\d+)\}\{(\d+)\}\s*\(\s*" + solution_latex_escaped + r"\s*\)"
 
         for _ in range(20):
-            m = _re.search(pat_frac_frac, cur)
-            if not m: break
-            frac_coef_numerator = int(m.group(1))
-            frac_coef_denominator = int(m.group(2))
-            frac_product_numerator   = frac_coef_numerator * solution_numerator
-            frac_product_denominator   =  frac_coef_denominator * solution_denominator
-            before_m = cur[:m.start()]
-            after_m  = cur[m.end():]
+            pattern_match = _re.search(fraction_times_fraction_pattern, current_expression)
+            if not pattern_match:
+                break
+            frac_coef_numerator = int(pattern_match.group(1))
+            frac_coef_denominator = int(pattern_match.group(2))
+            frac_product_numerator = frac_coef_numerator * solution_numerator
+            frac_product_denominator = frac_coef_denominator * solution_denominator
+            before_match = current_expression[:pattern_match.start()]
+            after_match = current_expression[pattern_match.end():]
 
             frac_product_shown = (
                 r"\frac{" + str(frac_coef_numerator) + r" \cdot " + solution_numerator_str
-                + r"}{" + str( frac_coef_denominator) + r" \cdot " + str(solution_denominator) + r"}"
+                + r"}{" + str(frac_coef_denominator) + r" \cdot " + str(solution_denominator) + r"}"
             )
-            s1 = _fix_pm(before_m + frac_product_shown + after_m)
-            if s1 != cur: result.append((s1, None)); cur = s1
+            expr_with_multiplication = _fix_pm(before_match + frac_product_shown + after_match)
+            if expr_with_multiplication != current_expression:
+                result.append((expr_with_multiplication, None))
+                current_expression = expr_with_multiplication
 
-            frac_numerator_evaluated   = r"\frac{" + str(frac_product_numerator) + r"}{" + str(frac_product_denominator) + r"}"
-            frac_fraction_reduced   = sp.latex(sp.Rational(frac_product_numerator, frac_product_denominator))
+            frac_numerator_evaluated = r"\frac{" + str(frac_product_numerator) + r"}{" + str(frac_product_denominator) + r"}"
+            frac_fraction_reduced = sp.latex(sp.Rational(frac_product_numerator, frac_product_denominator))
             frac_simplification_is_integer = "\\frac" not in frac_fraction_reduced
 
             if frac_fraction_reduced == frac_numerator_evaluated:
-                s2 = _fix_pm(cur.replace(frac_product_shown, frac_numerator_evaluated, 1))
-                if s2 != cur: result.append((s2, None)); cur = s2
+                expr_with_evaluated_numerator = _fix_pm(current_expression.replace(frac_product_shown, frac_numerator_evaluated, 1))
+                if expr_with_evaluated_numerator != current_expression:
+                    result.append((expr_with_evaluated_numerator, None))
+                    current_expression = expr_with_evaluated_numerator
             elif frac_simplification_is_integer:
-                s3 = _fix_pm(cur.replace(frac_product_shown, frac_fraction_reduced, 1))
-                if s3 != cur: result.append((s3, None)); cur = s3
+                final_reduced_expr = _fix_pm(current_expression.replace(frac_product_shown, frac_fraction_reduced, 1))
+                if final_reduced_expr != current_expression:
+                    result.append((final_reduced_expr, None))
+                    current_expression = final_reduced_expr
             else:
-                s2 = _fix_pm(cur.replace(frac_product_shown, frac_numerator_evaluated, 1))
-                if s2 != cur: result.append((s2, None)); cur = s2
-                s3 = _fix_pm(cur.replace(frac_numerator_evaluated, frac_fraction_reduced, 1))
-                if s3 != cur: result.append((s3, None)); cur = s3
+                expr_with_evaluated_numerator = _fix_pm(current_expression.replace(frac_product_shown, frac_numerator_evaluated, 1))
+                if expr_with_evaluated_numerator != current_expression:
+                    result.append((expr_with_evaluated_numerator, None))
+                    current_expression = expr_with_evaluated_numerator
+                final_reduced_expr = _fix_pm(current_expression.replace(frac_numerator_evaluated, frac_fraction_reduced, 1))
+                if final_reduced_expr != current_expression:
+                    result.append((final_reduced_expr, None))
+                    current_expression = final_reduced_expr
 
         # Step 1c: simplify any unreduced positive constant fractions still
         # present in the string, e.g. \frac{6}{4} >> \frac{3}{2}.
         # These originate from the original equation text which _check_solution
         # preserves verbatim so that the display matches the input exactly.
-        pat_const_frac = r"\\frac\{(\d+)\}\{(\d+)\}"
+        constant_fraction_pattern = r"\\frac\{(\d+)\}\{(\d+)\}"
         for _ in range(20):
-            found_any = False
-            for m in _re.finditer(pat_const_frac, cur):
+            has_reducible_fraction = False
+            for pattern_match in _re.finditer(constant_fraction_pattern, current_expression):
 
-                const_frac_numerator = int(m.group(1))
-                const_frac_denominator = int(m.group(2))
-                g = math.gcd(const_frac_numerator,  const_frac_denominator)
-                if g > 1:
-                    const_frac_unreduced   = r"\frac{" + str(const_frac_numerator) + r"}{" + str( const_frac_denominator) + r"}"
+                const_frac_numerator = int(pattern_match.group(1))
+                const_frac_denominator = int(pattern_match.group(2))
+                common_divisor = math.gcd(const_frac_numerator, const_frac_denominator)
+                if common_divisor > 1:
+                    const_frac_unreduced = r"\frac{" + str(const_frac_numerator) + r"}{" + str(const_frac_denominator) + r"}"
                     const_frac_reduced = (
-                        r"\frac{" + str(const_frac_numerator // g) + r"}{" + str( const_frac_denominator // g) + r"}"
-                        if  const_frac_denominator // g > 1 else str(const_frac_numerator // g)
+                        r"\frac{" + str(const_frac_numerator // common_divisor) + r"}{" + str(const_frac_denominator // common_divisor) + r"}"
+                        if const_frac_denominator // common_divisor > 1 else str(const_frac_numerator // common_divisor)
                     )
-                    novo = _fix_pm(cur.replace(const_frac_unreduced, const_frac_reduced, 1))
-                    if novo != cur:
-                        result.append((novo, None)); cur = novo
-                        found_any = True
+                    new_expression = _fix_pm(current_expression.replace(const_frac_unreduced, const_frac_reduced, 1))
+                    if new_expression != current_expression:
+                        result.append((new_expression, None))
+                        current_expression = new_expression
+                        has_reducible_fraction = True
                         break
-            if not found_any:
+            if not has_reducible_fraction:
                 break
 
         # Step 2: convert any remaining isolated integers to the common
         # denominator of all fractions currently present in the expression.
-        def _find_isolated_ints(s):
+        def _find_isolated_ints(expression):
             """
             Find integers outside LaTeX braces that are not immediately
             followed by / or { (which would make them part of a fraction).
             """
-            found = []; depth = 0; i = 0
-            while i < len(s):
-                c = s[i]
-                if c == "{": depth += 1; i += 1; continue
-                if c == "}": depth -= 1; i += 1; continue
-                if depth > 0: i += 1; continue
-                sign  = 1
+            # FIX Bug 1: use 'i' consistently as the loop index throughout,
+            # matching the initialisation 'i = 0' at the top of the function.
+            isolated_integers = []
+            brace_level = 0
+            i = 0
+            while i < len(expression):
+                current_char = expression[i]
+                if current_char == "{":
+                    brace_level += 1
+                    i += 1
+                    continue
+                if current_char == "}":
+                    brace_level -= 1
+                    i += 1
+                    continue
+                if brace_level > 0:
+                    i += 1
+                    continue
+                sign = 1
                 start = i
-                if c == "-" and i + 1 < len(s) and s[i + 1].isdigit():
-                    if i == 0 or s[i - 1] in " +=({":
-                        sign = -1; i += 1; c = s[i]
+                if current_char == "-" and i + 1 < len(expression) and expression[i + 1].isdigit():
+                    if i == 0 or expression[i - 1] in " +=({":
+                        sign = -1
+                        i += 1
+                        current_char = expression[i]
                     else:
-                        i += 1; continue
-                if c.isdigit():
-                    j = i
-                    while j < len(s) and s[j].isdigit(): j += 1
-                    if j < len(s) and s[j] in "/{": i = j; continue
-                    try: n = sign * int(s[i:j])
-                    except: i += 1; continue
-                    if n != 0: found.append((start, j, n))
-                    i = j
+                        i += 1
+                        continue
+                if current_char.isdigit():
+                    number_end = i
+                    while number_end < len(expression) and expression[number_end].isdigit():
+                        number_end += 1
+                    if number_end < len(expression) and expression[number_end] in "/{":
+                        i = number_end
+                        continue
+                    try:
+                        integer_value = sign * int(expression[i:number_end])
+                    except:
+                        i += 1
+                        continue
+                    if integer_value != 0:
+                        isolated_integers.append((start, number_end, integer_value))
+                    i = number_end
                 else:
                     i += 1
-            return found
+            return isolated_integers
 
-        def _dens_in(s):
+        def _dens_in(expression):
             """Extract all denominators from \\frac{...}{d} patterns."""
-            return [int(d) for d in _re.findall(r"\\frac\{[^}]+\}\{(\d+)\}", s)]
+            return [int(denominator) for denominator in _re.findall(r"\\frac\{[^}]+\}\{(\d+)\}", expression)]
 
-        dens = _dens_in(cur)
-        if dens and _find_isolated_ints(cur):
+        found_denominators = _dens_in(current_expression)
+        if found_denominators and _find_isolated_ints(current_expression):
             from functools import reduce as _fr2
-            common_denominator = _fr2(_mlcm, dens)
-            result.append((cur, f"Reduce to common denominator ({common_denominator})"))
+            common_denominator = _fr2(_mlcm, found_denominators)
+            result.append((current_expression, f"Reduce to common denominator ({common_denominator})"))
             for _ in range(30):
-                iso = _find_isolated_ints(cur)
-                if not iso: break
-                start, end, n = iso[0]
-                frac = r"\frac{" + str(n * common_denominator) + r"}{" + str(common_denominator) + r"}"
-                novo = _fix_pm(cur[:start] + frac + cur[end:])
-                if novo == cur: break
-                result.append((novo, None)); cur = novo
+                found_integers = _find_isolated_ints(current_expression)
+                if not found_integers:
+                    break
+                start, end, integer_value = found_integers[0]
+                converted_fraction = r"\frac{" + str(integer_value * common_denominator) + r"}{" + str(common_denominator) + r"}"
+                new_expression = _fix_pm(current_expression[:start] + converted_fraction + current_expression[end:])
+                if new_expression == current_expression:
+                    break
+                result.append((new_expression, None))
+                current_expression = new_expression
 
         # Step 3: add or subtract fractions pairwise until only one remains.
-        fp = r"(\\frac\{(-?\d+)\}\{(\d+)\})\s*([+-])\s*(\\frac\{(-?\d+)\}\{(\d+)\})"
+        fraction_pair_pattern = r"(\\frac\{(-?\d+)\}\{(\d+)\})\s*([+-])\s*(\\frac\{(-?\d+)\}\{(\d+)\})"
         for _ in range(30):
-            m = _re.search(fp, cur)
-            if not m: break
-            na, da = int(m.group(2)), int(m.group(3))
-            op     = m.group(4)
-            nb, db = int(m.group(6)), int(m.group(7))
+            pattern_match = _re.search(fraction_pair_pattern, current_expression)
+            if not pattern_match:
+                break
+            first_numerator = int(pattern_match.group(2))
+            first_denominator = int(pattern_match.group(3))
+            operator = pattern_match.group(4)
+            second_numerator = int(pattern_match.group(6))
+            second_denominator = int(pattern_match.group(7))
 
             # Absorb a leading external minus sign into the first numerator.
-            prefix = cur[:m.start()].rstrip()
-            if prefix.endswith("-"):
-                na  = -abs(na)
-                cur = cur[:len(prefix) - 1].rstrip() + " " + cur[len(prefix):]
-                m   = _re.search(fp, cur)
-                if not m: break
-                na, da = int(m.group(2)), int(m.group(3))
-                na = -abs(na)
-                op = m.group(4)
-                nb, db = int(m.group(6)), int(m.group(7))
+            before_match = current_expression[:pattern_match.start()].rstrip()
+            if before_match.endswith("-"):
+                first_numerator = -abs(first_numerator)
+                current_expression = current_expression[:len(before_match) - 1].rstrip() + " " + current_expression[len(before_match):]
+                pattern_match = _re.search(fraction_pair_pattern, current_expression)
+                if not pattern_match:
+                    break
+                first_numerator, first_denominator = int(pattern_match.group(2)), int(pattern_match.group(3))
+                first_numerator = -abs(first_numerator)
+                operator = pattern_match.group(4)
+                second_numerator, second_denominator = int(pattern_match.group(6)), int(pattern_match.group(7))
 
             # If denominators differ, align them first.
-            if da != db:
+            if first_denominator != second_denominator:
                 from math import lcm as _lcm2
-                dc     = _lcm2(da, db)
-                na_new = na * (dc // da)
-                nb_new = nb * (dc // db)
-                f_a    = r"\frac{" + str(na_new) + r"}{" + str(dc) + r"}"
-                f_b    = r"\frac{" + str(nb_new) + r"}{" + str(dc) + r"}"
-                novo   = _fix_pm(
-                    cur[:m.start()] + f_a + " " + op + " " + f_b + cur[m.end():]
+                common_denominator     = _lcm2(first_denominator, second_denominator)
+                first_numerator_converted = first_numerator * (common_denominator // first_denominator)
+                second_numerator_converted = second_numerator * (common_denominator // second_denominator)
+                first_fraction_common_den    = r"\frac{" + str(first_numerator_converted) + r"}{" + str(common_denominator) + r"}"
+                second_fraction_common_den    = r"\frac{" + str(second_numerator_converted) + r"}{" + str(common_denominator) + r"}"
+                new_expression = _fix_pm(
+                    current_expression[:pattern_match.start()] + first_fraction_common_den + " " + operator + " " + second_fraction_common_den + current_expression[pattern_match.end():]
                 )
-                if novo == cur: break
-                result.append((novo, None)); cur = novo
+                if new_expression == current_expression:
+                    break
+                result.append((new_expression, None))
+                current_expression = new_expression
                 continue
 
             # Same denominator: show the unevaluated combined numerator first.
-            nb_s        = nb if op == "+" else -nb
-            num_expr    = f"{na} + {nb}" if op == "+" else f"{na} - {nb}"
-            frac_joined = r"\frac{" + num_expr + r"}{" + str(da) + r"}"
-            novo_j = _fix_pm(cur[:m.start()] + frac_joined + cur[m.end():])
-            if novo_j != cur:
-                result.append((novo_j, None)); cur = novo_j
+            second_numerator_with_sign        = second_numerator if operator == "+" else -second_numerator
+            unevaluated_numerator_expression    = f"{first_numerator} + {second_numerator}" if operator == "+" else f"{first_numerator} - {second_numerator}"
+            grouped_fraction = r"\frac{" + unevaluated_numerator_expression + r"}{" + str(first_denominator) + r"}"
+            expr_with_joined_fraction = _fix_pm(current_expression[:pattern_match.start()] + grouped_fraction + current_expression[pattern_match.end():])
+            if expr_with_joined_fraction != current_expression:
+                result.append((expr_with_joined_fraction, None))
+                current_expression = expr_with_joined_fraction
 
             # Then evaluate the numerator as an explicit intermediate step.
-            soma_n         = na + nb_s
-            frac_evaluated = r"\frac{" + str(soma_n) + r"}{" + str(da) + r"}"
-            frac_result    = sp.latex(sp.Rational(soma_n, da))
+            numerator_sum         = first_numerator + second_numerator_with_sign
+            frac_with_numerator_evaluated = r"\frac{" + str(numerator_sum) + r"}{" + str(first_denominator) + r"}"
+            reduced_fraction    = sp.latex(sp.Rational(numerator_sum, first_denominator))
 
-            if frac_evaluated != frac_joined:
-                novo_eval = _fix_pm(cur.replace(frac_joined, frac_evaluated, 1))
-                if novo_eval != cur:
-                    result.append((novo_eval, None)); cur = novo_eval
+            if frac_with_numerator_evaluated != grouped_fraction:
+                new_expression_eval = _fix_pm(current_expression.replace(grouped_fraction, frac_with_numerator_evaluated, 1))
+                if new_expression_eval != current_expression:
+                    result.append((new_expression_eval, None))
+                    current_expression = new_expression_eval
 
             # Finally simplify the fraction if it is reducible.
-            if frac_result != frac_evaluated:
-                novo = _fix_pm(cur.replace(frac_evaluated, frac_result, 1))
-                if novo == cur: break
-                result.append((novo, None)); cur = novo
+            if reduced_fraction != frac_with_numerator_evaluated:
+                new_expression = _fix_pm(current_expression.replace(frac_with_numerator_evaluated, reduced_fraction, 1))
+                if new_expression == current_expression:
+                    break
+                result.append((new_expression, None))
+                current_expression = new_expression
             else:
-                novo = _fix_pm(
-                    cur.replace(frac_joined, frac_result, 1) if frac_joined in cur else cur
+                new_expression = _fix_pm(
+                    current_expression.replace(grouped_fraction, reduced_fraction, 1) if grouped_fraction in current_expression else current_expression
                 )
-                if novo != cur:
-                    result.append((novo, None)); cur = novo
+                if new_expression != current_expression:
+                    result.append((new_expression, None))
+                    current_expression = new_expression
 
-        final_str = sp.latex(sp.simplify(sym_evaled))
-        if cur != final_str:
-            result.append((final_str, None))
+        final_expression = sp.latex(sp.simplify(sym_evaled))
+        if current_expression != final_expression:
+            result.append((final_expression, None))
 
         # Remove consecutive duplicate entries while keeping explanations.
-        deduped = [result[0]]
+        deduplicated_steps = [result[0]]
         for item in result[1:]:
-            s, e = item
-            if s != deduped[-1][0] or e is not None:
-                deduped.append(item)
-        return deduped
+            step_latex, step_explanation = item
+            if step_latex != deduplicated_steps[-1][0] or step_explanation is not None:
+                deduplicated_steps.append(item)
+        return deduplicated_steps
 
     # ==================================================================
     # INNER FUNCTION: _check_solution
@@ -1181,96 +1239,99 @@ def solve_linear(equation: str):
         # Build the LaTeX display of the original equation.
         # Fractions are shown as \frac{a}{b} but NOT simplified, so that the
         # display matches the user's original input (e.g. 6/4 stays as \frac{6}{4}).
-        def _fracs_to_latex(s):
+        def _fracs_to_latex(expression):
             return re.sub(
                 r"(-?\d+)/(\d+)",
-                lambda m: r"\frac{" + m.group(1) + r"}{" + m.group(2) + r"}",
-                s,
+                lambda match: r"\frac{" + match.group(1) + r"}{" + match.group(2) + r"}",
+                expression,
             )
 
-        left_disp  = _fracs_to_latex(left_str.strip())
-        right_disp = _fracs_to_latex(right_str.strip())
+        left_display  = _fracs_to_latex(left_str.strip())
+        right_display = _fracs_to_latex(right_str.strip())
         # Add a space between \frac{a}{b} and a following variable letter.
-        left_disp  = re.sub(r"(\\frac\{\d+\}\{\d+\})(\s*)([a-zA-Z])", r"\1 \3", left_disp)
-        right_disp = re.sub(r"(\\frac\{\d+\}\{\d+\})(\s*)([a-zA-Z])", r"\1 \3", right_disp)
-        equation_latex = f"{left_disp} = {right_disp}"
+        left_display  = re.sub(r"(\\frac\{\d+\}\{\d+\})(\s*)([a-zA-Z])", r"\1 \3", left_display)
+        right_display = re.sub(r"(\\frac\{\d+\}\{\d+\})(\s*)([a-zA-Z])", r"\1 \3", right_display)
+        equation_display = f"{left_display} = {right_display}"
 
         steps.append(Step(
-            before=equation_latex, after=equation_latex,
+            before=equation_display, after=equation_display,
             explanation="Let's verify!",
         ))
         steps.append(Step(
-            before=equation_latex, after=equation_latex,
+            before=equation_display, after=equation_display,
             explanation=f"Now substitute x for {final_latex}",
         ))
 
         # Replace every x occurrence in the LaTeX string with (value).
         solution_latex = sp.latex(final_value)
 
-        def _sub_x(latex_str, val):
+        def _sub_x(expression, x_value):
             return re.sub(
                 r"(?<![a-zA-Z])x(?![a-zA-Z])",
-                lambda _m: "(" + val + ")",
-                latex_str,
+                lambda _match: "(" + x_value + ")",
+                expression,
             )
 
-        left_subst  = _sub_x(left_disp,  solution_latex)
-        right_subst = _sub_x(right_disp, solution_latex)
+        left_substituted  = _sub_x(left_display,  solution_latex)
+        right_substituted = _sub_x(right_display, solution_latex)
 
-        steps.append(Step(
-            before=equation_latex,
-            after=f"{left_subst} = {right_subst}",
-        ))
+        steps.append(
+            Step(
+                before=equation_display,
+                after=f"{left_substituted} = {right_substituted}",
+            )
+        )
 
         # Substitute into the SymPy expressions, keeping each Add term
         # separate so the stepwise evaluator can process them individually.
-        def _subst_terms(sym, val):
-            if isinstance(sym, sp.Add):
-                new_t = [t.xreplace({x: sp.UnevaluatedExpr(val)}) for t in sym.args]
-                return sp.Add(*new_t, evaluate=False)
-            return sym.xreplace({x: sp.UnevaluatedExpr(val)})
+        def _subst_terms(sympy_expression, x_value):
+            if isinstance(sympy_expression, sp.Add):
+                substituted_terms = [term.xreplace({x: sp.UnevaluatedExpr(x_value)}) for term in sympy_expression.args]
+                return sp.Add(*substituted_terms, evaluate=False)
+            return sympy_expression.xreplace({x: sp.UnevaluatedExpr(x_value)})
 
-        left_evaled  = _subst_terms(left_sym,  final_value)
-        right_evaled = _subst_terms(right_sym, final_value)
+        left_unevaluated  = _subst_terms(left_sym,  final_value)
+        right_unevaluated = _subst_terms(right_sym, final_value)
 
-        left_tuples  = _sympy_stepwise(left_subst,  left_evaled,  final_value)
-        right_tuples = _sympy_stepwise(right_subst, right_evaled, final_value)
+        left_tuples  = _sympy_stepwise(left_substituted,  left_unevaluated,  final_value)
+        right_tuples = _sympy_stepwise(right_substituted, right_unevaluated, final_value)
 
         def _extract(tuples):
             """Split (latex, explanation) tuples into a step list and an
             explanation map keyed by step index."""
-            sl, ex = [], {}
-            for i, (s, e) in enumerate(tuples):
-                sl.append(s)
-                if e: ex[i] = e
-            return sl, ex
+            steps, explanations = [], {}
+            for i, (step_str, step_explanation) in enumerate(tuples):
+                steps.append(step_str)
+                if step_explanation:
+                    explanations[i] = step_explanation
+            return steps, explanations
 
-        left_steps_v,  left_expls  = _extract(left_tuples)
-        right_steps_v, right_expls = _extract(right_tuples)
+        left_steps_v,  left_explanations  = _extract(left_tuples)
+        right_steps_v, right_explanations = _extract(right_tuples)
 
         # Animate the left side first, keeping the right side fixed.
-        cur_left, cur_right = left_subst, right_subst
+        current_left, current_right = left_substituted, right_substituted
 
-        for i, l_after in enumerate(left_steps_v):
-            expl   = left_expls.get(i)
-            before = f"{cur_left} = {cur_right}"
-            if expl:
-                steps.append(Step(before=before, after=before, explanation=expl))
-            after = f"{l_after} = {cur_right}"
-            if before != after:
-                steps.append(Step(before=before, after=after))
-            cur_left = l_after
+        for i, left_after in enumerate(left_steps_v):
+            current_explanation   = left_explanations.get(i)
+            equation_before = f"{current_left} = {current_right}"
+            if current_explanation:
+                steps.append(Step(before=equation_before, after=equation_before, explanation=current_explanation))
+            equation_after = f"{left_after} = {current_right}"
+            if equation_before != equation_after:
+                steps.append(Step(before=equation_before, after=equation_after))
+            current_left = left_after
 
         # Then animate the right side, keeping the left side fixed.
-        for i, r_after in enumerate(right_steps_v):
-            expl   = right_expls.get(i)
-            before = f"{cur_left} = {cur_right}"
-            if expl:
-                steps.append(Step(before=before, after=before, explanation=expl))
-            after = f"{cur_left} = {r_after}"
-            if before != after:
-                steps.append(Step(before=before, after=after))
-            cur_right = r_after
+        for i, right_after in enumerate(right_steps_v):
+            current_explanation   = right_explanations.get(i)
+            equation_before = f"{current_left} = {current_right}"
+            if current_explanation:
+                steps.append(Step(before=equation_before, after=equation_before, explanation=current_explanation))
+            equation_after = f"{current_left} = {right_after}"
+            if equation_before != equation_after:
+                steps.append(Step(before=equation_before, after=equation_after))
+            current_right = right_after
 
         # Evaluate both sides numerically and confirm whether they are equal.
         left_orig  = sp.sympify(normalize_expression(left_str.strip()),  evaluate=False)
@@ -1278,16 +1339,16 @@ def solve_linear(equation: str):
         is_true    = sp.simplify(
             left_orig.subs(x, final_value) - right_orig.subs(x, final_value)
         ) == 0
-        explanation = (
+        current_explanation = (
             "The solution is correct!"
             if is_true
             else "The solution does not satisfy the equation."
         )
 
         steps.append(Step(
-            before=f"{cur_left} = {cur_right}",
-            after=f"{cur_left} = {cur_right}",
-            explanation=explanation,
+            before=f"{current_left} = {current_right}",
+            after=f"{current_left} = {current_right}",
+            explanation=current_explanation,
         ))
 
     # ------------------------------------------------------------------
@@ -1300,12 +1361,12 @@ def solve_linear(equation: str):
         ))
         final_value = const
         final_latex = sp.latex(final_value)
-        dec = _decimal_str(final_value)
-        if dec:
-            sol_latex = f"x = {final_latex}"
+        decimal_approximation = _decimal_str(final_value)
+        if decimal_approximation:
+            solution_str = f"x = {final_latex}"
             steps.append(Step(
-                before=sol_latex, after=sol_latex,
-                explanation=f"x = {final_latex} \\approx {dec}",
+                before=solution_str, after=solution_str,
+                explanation=f"x = {final_latex} \\approx {decimal_approximation}",
             ))
         _check_solution(final_value, final_latex, equation, steps)
 
@@ -1313,17 +1374,17 @@ def solve_linear(equation: str):
     # Case 2: coefficient of x requires a division step.
     # ------------------------------------------------------------------
     else:
-        coef_rat  = sp.Rational(coef)
-        const_rat = sp.Rational(const)
+        coefficient_rational  = sp.Rational(coef)
+        constant_rational = sp.Rational(const)
 
         final_left_latex  = sp.latex(final_left)
         final_right_latex = sp.latex(final_right)
 
         # Sub-case 2a: fractional coefficient (e.g. -5/2 x = -12).
         # Delegate to the dedicated function that handles the multiply/divide sequence.
-        if coef_rat.q > 1:
+        if coefficient_rational.q > 1:
             extra_steps, solution = _rational_coef_solve_steps(
-                coef_rat, const_rat,
+                coefficient_rational, constant_rational,
                 final_left_latex, final_right_latex,
             )
             steps.extend(extra_steps)
@@ -1332,75 +1393,74 @@ def solve_linear(equation: str):
         else:
             # Check whether a partial simplification step is possible before
             # the final division (e.g. 12x = 8  --div 4-->  3x = 2  --div 3-->  x = 2/3).
-            divisor_intermedio = safe_gcd(abs(const_rat), abs(coef_rat))
-            coef_simpl  = coef_rat  / divisor_intermedio
-            const_simpl = const_rat / divisor_intermedio
-            mostrar_intermedio = (
-                divisor_intermedio > 1
-                and divisor_intermedio != abs(coef_rat)
-                and (isinstance(coef_simpl,  sp.Integer) or coef_simpl.q  == 1)
-                and (isinstance(const_simpl, sp.Integer) or const_simpl.q == 1)
-                and coef_simpl != 1
+            common_divisor = safe_gcd(abs(constant_rational), abs(coefficient_rational))
+            simplified_coef  = coefficient_rational  / common_divisor
+            simplified_const = constant_rational / common_divisor
+            has_intermediate_step = (
+                common_divisor > 1
+                and common_divisor != abs(coefficient_rational)
+                and (isinstance(simplified_coef,  sp.Integer) or simplified_coef.q  == 1)
+                and (isinstance(simplified_const, sp.Integer) or simplified_const.q == 1)
+                and simplified_coef != 1
             )
 
-            if mostrar_intermedio:
-                left_int  = coef_simpl * x
-                right_int = const_simpl
+            if has_intermediate_step:
+                left_after_division  = simplified_coef * x
+                right_after_division = simplified_const
                 steps.append(Step(
                     before=f"{final_left_latex} = {final_right_latex}",
                     after=f"{final_left_latex} = {final_right_latex}",
-                    explanation=f"Divide both sides by {sp.latex(divisor_intermedio)}",
+                    explanation=f"Divide both sides by {sp.latex(common_divisor)}",
                 ))
                 steps.append(Step(
                     before=f"{final_left_latex} = {final_right_latex}",
-                    after=f"{sp.latex(left_int)} = {sp.latex(right_int)}",
+                    after=f"{sp.latex(left_after_division)} = {sp.latex(right_after_division)}",
                 ))
                 steps.append(Step(
-                    before=f"{sp.latex(left_int)} = {sp.latex(right_int)}",
-                    after=f"{sp.latex(left_int)} = {sp.latex(right_int)}",
-                    explanation=f"Divide both sides by {sp.latex(coef_simpl)}",
+                    before=f"{sp.latex(left_after_division)} = {sp.latex(right_after_division)}",
+                    after=f"{sp.latex(left_after_division)} = {sp.latex(right_after_division)}",
+                    explanation=f"Divide both sides by {sp.latex(simplified_coef)}",
                 ))
                 steps.append(Step(
-                    before=f"{sp.latex(left_int)} = {sp.latex(right_int)}",
-                    after=f"x = {sp.latex(sp.Rational(const_rat, coef_rat))}",
+                    before=f"{sp.latex(left_after_division)} = {sp.latex(right_after_division)}",
+                    after=f"x = {sp.latex(sp.Rational(constant_rational, coefficient_rational))}",
                 ))
             else:
                 # Direct division: show x = const/coef unreduced first,
                 # then simplify (e.g. 15x = 3  >>  x = 3/15  >>  x = 1/5).
-                solution = sp.Rational(const_rat, coef_rat)
-                frac_unreduced  = (
-                    r"\frac{" + str(int(const_rat)) + r"}{" + str(int(coef_rat)) + r"}"
+                solution = sp.Rational(constant_rational, coefficient_rational)
+                unreduced_fraction  = (
+                    r"\frac{" + str(int(constant_rational)) + r"}{" + str(int(coefficient_rational)) + r"}"
                 )
-                frac_simplified = sp.latex(solution)
+                reduced_fraction = sp.latex(solution)
                 steps.append(Step(
                     before=f"{final_left_latex} = {final_right_latex}",
                     after=f"{final_left_latex} = {final_right_latex}",
-                    explanation=f"Divide both sides by {sp.latex(coef_rat)}",
+                    explanation=f"Divide both sides by {sp.latex(coefficient_rational)}",
                 ))
                 steps.append(Step(
                     before=f"{final_left_latex} = {final_right_latex}",
-                    after=f"x = {frac_unreduced}",
+                    after=f"x = {unreduced_fraction}",
                 ))
-                if frac_simplified != frac_unreduced:
+                if reduced_fraction != unreduced_fraction:
                     steps.append(Step(
-                        before=f"x = {frac_unreduced}",
-                        after=f"x = {frac_simplified}",
+                        before=f"x = {unreduced_fraction}",
+                        after=f"x = {reduced_fraction}",
                     ))
 
-            solution = sp.Rational(const_rat, coef_rat)
+            solution = sp.Rational(constant_rational, coefficient_rational)
 
         final_value = solution
         final_latex = sp.latex(final_value)
 
-        dec = _decimal_str(final_value)
-        if dec:
-            sol_latex = f"x = {final_latex}"
+        decimal_approximation = _decimal_str(final_value)
+        if decimal_approximation:
+            solution_str = f"x = {final_latex}"
             steps.append(Step(
-                before=sol_latex, after=sol_latex,
-                explanation=f"x = {final_latex} \\approx {dec}",
+                before=solution_str, after=solution_str,
+                explanation=f"x = {final_latex} \\approx {decimal_approximation}",
             ))
 
         _check_solution(final_value, final_latex, equation, steps)
 
     return steps
-
