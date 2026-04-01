@@ -39,7 +39,7 @@ class AnimationController:
         coeffs = polynomial.all_coeffs()
  
         # FIX B: usa compute_mmc (reduce com lcm) em vez de sp.lcm(*lista)
-        #         que só aceita exatamente 2 argumentos
+        # que só aceita exatamente 2 argumentos
         denominators = []
         for c in coeffs:
             _, den = c.as_numer_denom()
@@ -54,7 +54,7 @@ class AnimationController:
             scaled_expression = expr
  
         # FIX C: dispatch_solver trata internamente do grau;
-        #         os argumentos extra do quadratic são passados via keyword
+        # os argumentos extra do quadratic são passados via keyword
         steps = dispatch_solver(
             equation=equation,
             polynomial=polynomial,

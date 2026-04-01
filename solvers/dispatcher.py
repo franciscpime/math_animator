@@ -14,14 +14,6 @@ def dispatch_solver(
     is_factorized=False,
     m=None, n=None, o=None, p=None
 ):
-    """
-    Encaminha a equação para o solver correto consoante o grau.
- 
-    O AnimationController calcula polynomial, mmc e scaled_expression
-    antes de chamar aqui, e passa-os como argumentos.
-    Se chamado sem esses argumentos (ex: testes unitários),
-    o dispatcher calcula-os internamente a partir da string.
-    """
  
     left, right = equation.split("=")
  
@@ -30,7 +22,6 @@ def dispatch_solver(
  
     expr = sp.expand(sp.sympify(f"{left_norm}-({right_norm})"))
  
-    # Se o polynomial não foi passado, calcula aqui
     if polynomial is None:
         polynomial = sp.Poly(expr, x)
  
@@ -46,7 +37,7 @@ def dispatch_solver(
         return solve_linear(equation)
  
     if degree == 2:
-        # FIX C: passa todos os argumentos que solve_quadratic precisa
+        
         return solve_quadratic(
             polynomial=polynomial,
             equation=equation,

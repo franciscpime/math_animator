@@ -21,7 +21,7 @@ def extract_terms(expression: str):
 
     return sympy_terms
 
-
+################# no being used
 def detailed_multiplication(expr):
     """Return a list of intermediate SymPy expressions that show how a product
     of rationals/nums is combined step by step. If expr is not a Mul, returns []
