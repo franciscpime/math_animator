@@ -1,7 +1,10 @@
 import sympy as sp
 import re
 
-
+'''
+This function converts mathematical expressions into a normalized form
+that can be more easily parsed by SymPy.
+'''
 def normalize_expression(expr):
     # Replace commas with dots: 0,9 >> 0.9
     expr = re.sub(r'(\d),(\d)', r'\1.\2', expr)
@@ -21,8 +24,16 @@ def normalize_expression(expr):
     return expr
 
 
+'''
+This function parses a mathematical equation and returns 
+the left and right sides as SymPy expressions.
+
+Example: 2*x + 3 = 4*x - 5
+Left side: 2*x + 3
+Right side: 4*x - 5
+'''
 def parse_equation(equation: str):
-    # Split on "=" to get the left and right sides as separate strings.
+
     left, right = equation.split("=")
     left = left.strip()
     right = right.strip()
@@ -34,80 +45,108 @@ def parse_equation(equation: str):
     return left, right
 
 
+'''
+This function fixes implicit multiplication in a mathematical expression.
+
+Example: 10(3/4) becomes 10*(3/4)
+'''
 def fix_implicit_mul(expr: str):
+
     # Insert "*" between a digit and an opening parenthesis so
-    # "10(3/4)" is treated as "10*(3/4)" by SymPy.
     return re.sub(r'(\d)\(', r'\1*(', expr)
 
 
-def safe_sympify(expr: str):
-    """
-    Try to parse a LaTeX or plain-math string into a SymPy expression.
-    First attempts SymPy's LaTeX parser; if that fails, falls back to
-    fixing implicit multiplication and calling sympify directly.
-    Returns sp.nan if both attempts fail so the caller can handle the error.
-    """
+'''
+This function safely converts a string expression into a SymPy expression.
+
+First - it tries to parse the expression using SymPy's built-in LaTeX parser.
+Second - if that fails, it attempts to fix implicit multiplication and call sympify directly.
+Finally - if both attempts fail, it returns sp.nan, which means 
+the expression could not be parsed.
+'''
+def safe_sympify(expression: str):
+
     from sympy.parsing.latex import parse_latex as _parse_latex
 
-    expr = expr.strip()
+    expression = expression.strip()
 
-    # Attempt 1: use SymPy's built-in LaTeX parser.
+    # Try parsing with LaTeX
     try:
-        parsed = _parse_latex(expr)
+        parsed = _parse_latex(expression)
         return sp.sympify(parsed, evaluate=False)
     except Exception:
         pass
 
-    # Attempt 2: fix implicit multiplication and call sympify directly.
+    # Try fixing implicit multiplication and call sympify directly.
     try:
-        cleaned = fix_implicit_mul(expr)
+        cleaned = fix_implicit_mul(expression)
         return sp.sympify(cleaned, evaluate=False)
     except Exception:
         return sp.nan
 
 
+'''
+This function detects raw fractions in a given expression string.
+
+Example: '1/2 + 3x' -> [('1', '2', Rational(1, 2))]
+'''
 def detect_raw_fractions(expr_str):
-    """
-    Find every fraction written as a/b in the original expression string
-    and return a list of tuples:
-      (numerator_str, denominator_str, Rational value)
-    Ex: '1/2 + 3x' -> [('1', '2', Rational(1, 2))]
-    """
+    # Dictionary to hold detected fractions
     fracs = []
 
-    for m in re.finditer(r'(-?\d+)/(\d+)', expr_str):
-        num = int(m.group(1))
-        den = int(m.group(2))
+    # Find all matches of the fraction pattern
+    for match in re.finditer(r'(-?\d+)/(\d+)', expr_str):
+        numerator = int(match.group(1))
+        denominator = int(match.group(2))
 
-        if den != 0:
-            fracs.append((m.group(1), m.group(2), sp.Rational(num, den)))
+        # Skip zero denominators
+        if denominator != 0:
+            fracs.append(
+                (
+                    match.group(1),
+                    match.group(2),
+                    sp.Rational(numerator, denominator)
+                )
+            )
 
     return fracs
 
+'''
+This function detects decimal numbers in a given expression string.
 
+Example: '0.5 + 1.2x' -> [('0.5', Rational(1, 2)), ('1.2', Rational(6, 5))]
+'''
 def detect_decimals(expr_str):
-    """
-    Find every decimal number written as a.b or a,b in the original expression
-    string and return a list of tuples:
-      (original_decimal_str, Rational value)
-    Ex: '0.5x + 1' -> [('0.5', Rational(1, 2))]
-    """
-    s = re.sub(r'(\d),(\d)', r'\1.\2', expr_str)
+    # Dictionary to hold detected decimals
     decimals = []
 
-    for m in re.finditer(r'-?\d+\.\d+', s):
-        d_str = m.group(0)
+    # Normalize the expression string
+    normalized_expression = re.sub(r'(\d),(\d)', r'\1.\2', expr_str)
+    normalized_expression = normalized_expression.replace(" ", "")
 
-        dec_part = d_str.lstrip('-').split('.')[1]
-        n_dec = len(dec_part)
-        den = 10 ** n_dec
+    # Find all matches of the decimal pattern
+    for match in re.finditer(r'-?\d+\.\d+', normalized_expression):
+        decimal_raw_str = match.group(0)
 
-        num_str = d_str.replace('.', '').replace('-', '')
-        num = int(num_str)
+        # Get the decimal part and calculate the denominator
+        decimal_part = decimal_raw_str.lstrip('-').split('.')[1]
+        number_of_decimal_places = len(decimal_part)
+        denominator = 10 ** number_of_decimal_places
 
-        if d_str.startswith('-'):
+        # Create the raw numerator string
+        # Example: '-0.5' -> '05'
+        raw_numerator_str = decimal_raw_str.replace('.', '').replace('-', '')
+        num = int(raw_numerator_str)
+
+        # Normalize the numerator
+        if decimal_raw_str.startswith('-'):
             num = -num
 
-        decimals.append((d_str, sp.Rational(num, den)))
+        decimals.append(
+            (
+                decimal_raw_str, 
+                sp.Rational(num, denominator)
+            )
+        )
 
     return decimals
