@@ -2,7 +2,12 @@ import sympy as sp
 from models.step import Step
 
 
-def rational_coef_solve_steps(coef_rational, const_rational, final_left_latex, final_right_latex):
+def rational_coef_solve_steps(
+        coef_rational: sp.Rational, 
+        const_rational: sp.Rational, 
+        final_left_latex: str, 
+        final_right_latex: str
+    ) -> list[Step]:
     """
     Generate the animation steps for solving (p/q)*x = c when q > 1.
 
