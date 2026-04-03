@@ -111,6 +111,7 @@ def detect_raw_fractions(expr_str):
 
     return fracs
 
+
 '''
 This function detects decimal numbers in a given expression string.
 
@@ -150,3 +151,4 @@ def detect_decimals(expr_str):
         )
 
     return decimals
+

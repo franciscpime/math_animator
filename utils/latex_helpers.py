@@ -4,83 +4,98 @@ import sympy as sp
 x = sp.symbols("x")
 
 
-def eq_to_latex_display(eq):
-    """
-    Convert every plain a/b fraction in an equation string to a LaTeX
-    \\frac{a}{b} so the equation renders correctly in the animation.
+'''
+This function converts an equation string to a LaTeX display format.
 
-    Example:
-      '1/2 x + 3 = 7/4'  >>  '\\frac{1}{2} x + 3 = \\frac{7}{4}'
-    """
+Example: '1/2 x + 3 = 7/4'  >>  '\\frac{1}{2} x + 3 = \\frac{7}{4}'
+'''
+def equation_to_latex_display(equation):
     return re.sub(
         r"(?<!\\\\)(-?\d+)/(\d+)",
         lambda m: r"\frac{" + m.group(1) + r"}{" + m.group(2) + r"}",
-        eq,
+        equation,
     )
 
 
-def coef_rational(term):
-    """Return the rational coefficient of a term containing x."""
-    return sp.Rational(term.coeff(x))
+'''
+This function converts a term containing x into a LaTeX display format.
 
+Examples:
 
+      frac_x_latex(1, 1)   >> '\\frac{x}{1}'
+      frac_x_latex(-1, 1)  >> '- \\frac{x}{1}'
+      frac_x_latex(0, 1)  >> '0'
+      frac_x_latex(2, 1)  >> '\\frac{2}{1}'
+      frac_x_latex(1, 4)  >> '- \\frac{x}{4}'
+      frac_x_latex(-1, 4)  >> '- \\frac{x}{4}'
+      frac_x_latex(-3, 2)   >> '- \\frac{3}{2}'
+'''
 def frac_x_latex(numerator, denominator):
-    """
-    Return LaTeX for (numerator/denominator)*x, keeping the denominator explicit.
 
-    Examples:
-      frac_x_latex(1, 2)   >> '\\frac{x}{2}'
-      frac_x_latex(-6, 2)  >> '- \\frac{6 x}{2}'
-      frac_x_latex(10, 1)  >> '10 x'
-    """
+    # If the denominator is 1
     if denominator == 1:
+        # and the numerator is also 1 >> 1/1x = x
         if numerator == 1:
             return "x"
+        # and the numerator is also -1 >> 1/1x = -x
         if numerator == -1:
             return "- x"
+        # and the numerator is also 0 >> 0/1x = 0
+        if numerator == 0:
+            return "0"
+        # otherwise return the integer >> 2/1x = 2
         return f"{numerator} x"
 
+    # If the denominator is 1 >> 1/4x = x/4
     if numerator == 1:
         return fr"\frac{{x}}{{{denominator}}}"
+    # If the numerator is also -1 >> -1/4x = -x/4
     if numerator == -1:
         return fr"- \frac{{x}}{{{denominator}}}"
+    # If the numerator is negative >> -3/2x
     if numerator < 0:
         return fr"- \frac{{{abs(numerator)} x}}{{{denominator}}}"
 
+    # Otherwise, return the fraction >> 3/2x
     return fr"\frac{{{numerator} x}}{{{denominator}}}"
 
 
-def frac_latex(numerator, denominator):
-    """
-    Return the LaTeX string for numerator/denominator, always showing the
-    denominator explicitly.
+'''
+This function converts a fraction without x into a LaTeX display format.
 
-    Examples:
-      frac_latex(18, 2)   >> '\\frac{18}{2}'
-      frac_latex(-9, 2)   >> '- \\frac{9}{2}'
-      frac_latex(8, 1)    >> '8'
-    """
+Examples:
+      frac_latex(3, 1)   >> '\\frac{3}{1}'
+      frac_latex(-1, 4)  >> '- \\frac{1}{4}'
+      frac_latex(3, 4)   >> '\\frac{3}{4}'
+'''
+def frac_latex(numerator, denominator):
+    # If the denominator is 1 >> 3/1 = 3
     if denominator == 1:
         return str(numerator)
 
+    # If the numerator is -1 >> -1/4 = -1/4
     if numerator < 0:
         return fr"- \frac{{{abs(numerator)}}}{{{denominator}}}"
 
+    # Otherwise >> 3/4 = 3/4
     return fr"\frac{{{numerator}}}{{{denominator}}}"
 
 
-def join_latex(parts):
-    """
-    Join a list of LaTeX term strings with explicit +/- operators.
-    Terms that start with '- ' are treated as negative and attached directly;
-    all others are preceded by ' + '.
+'''
+This function: 
+    - Joins LaTeX terms with explicit +/- operators.
+    - Terms that start with '- ' are treated as negative and attached directly.
+    - All others are preceded by ' + '.
 
-    Example:
+Example:
       ['\\frac{10 x}{5}', '\\frac{4 x}{5}', '- \\frac{15 x}{5}']
       >> '\\frac{10 x}{5} + \\frac{4 x}{5} - \\frac{15 x}{5}'
-    """
+'''
+def join_latex(parts):
+    # Start with the first term as the base of the result string
     result = parts[0]
 
+    # Iterate through the remaining parts
     for part in parts[1:]:
         if part.startswith("- "):
             result += " " + part
@@ -90,11 +105,22 @@ def join_latex(parts):
     return result
 
 
+'''
+Converts a rational solution to a decimal string rounded to 3 decimal
+places. Returns None when the solution is already a whole number, since
+no approximation is needed in that case.
+
+Examples:
+    solution = 3         >>  None        (whole number, no approximation needed)
+    solution = 2         >>  None        (whole number, no approximation needed)
+    solution = 1/3       >>  "0.333"     (rounded to 3 decimal places)
+    solution = 1/2       >>  "0.5"       (trailing zeros stripped: "0.500" >> "0.5")
+    solution = 3/1       >>  None        (denominator is 1, counts as whole number)
+'''
 def decimal_str(solution):
-    """
-    Convert a rational solution to a decimal string rounded to 3 significant
-    figures. Returns None when the solution is already an integer.
-    """
+    # Two cases count as whole numbers:
+    #   - sp.Integer directly                    (e.g. Integer(3))
+    #   - sp.Rational whose denominator is 1     (e.g. Rational(3, 1) == 3)
     if isinstance(solution, sp.Integer) or (
         isinstance(solution, sp.Rational) and solution.q == 1
     ):

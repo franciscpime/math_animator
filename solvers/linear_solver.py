@@ -6,7 +6,7 @@ from parser.equation_parser import (
     detect_decimals,
     detect_raw_fractions,
 )
-from utils.latex_helpers import eq_to_latex_display, decimal_str
+from utils.latex_helpers import equation_to_latex_display, decimal_str
 from utils.simplification_steps import fraction_simplification_steps, decimal_simplification_steps
 from utils.term_rearranger import rearrange_terms
 from utils.term_combiner import combine_terms_stepwise
@@ -36,7 +36,7 @@ def solve_linear(equation: str):
     raw_decimals  = detect_decimals(equation)
     raw_fractions = detect_raw_fractions(equation)
 
-    equation_display   = eq_to_latex_display(equation)
+    equation_display   = equation_to_latex_display(equation)
     current_eq_display = equation_display
 
     # ------------------------------------------------------------------
@@ -283,4 +283,3 @@ def solve_linear(equation: str):
 
     return steps
 
-    
