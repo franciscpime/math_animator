@@ -3,7 +3,6 @@ import math
 import sympy as sp
 from math import lcm as _mlcm
 from functools import reduce as _freduce
-
 from models.step import Step
 from parser.equation_parser import normalize_expression
 
