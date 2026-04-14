@@ -172,7 +172,7 @@ def rational_coef_solve_steps(
     eq_solution_simplified = f"x = {sp.latex(solution)}"
 
     # Only emit the simplification step if the fraction actually changed
-    # Example: 'x = \frac{125}{-2}'  !=  'x = -\frac{125}{2}'  >>  emit the step
+    # Example: 'x = \frac{125}{-2}' != 'x = -\frac{125}{2}' >> emit the step
     if eq_solution_simplified != eq_after_divide_unevaluated:
         result_steps.append(
             Step(
