@@ -24,13 +24,19 @@ def fraction_simplification_steps(num_str: str, den_str: str) -> list[str]:
     # Example: 6/4 >> 3/2
     # Otherwise, example: 6/5 remains 6/5
     if common_divisor > 1:
-        steps.append(
-            r"\frac{"
-            + str(numerator // common_divisor)
-            + r"}{"
-            + str(denominator // common_divisor)
-            + r"}"
-        )
+        reduced_num = numerator // common_divisor
+        reduced_den = denominator // common_divisor
+
+        if reduced_den == 1:
+            steps.append(str(reduced_num))
+        else:
+            steps.append(
+                r"\frac{"
+                + str(numerator // common_divisor)
+                + r"}{"
+                + str(denominator // common_divisor)
+                + r"}"
+            )
 
     return steps
 

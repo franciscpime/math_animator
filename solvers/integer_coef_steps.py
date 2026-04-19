@@ -170,25 +170,46 @@ def integer_coef_solve_steps(
             )
         )
 
-        # Step 2: show x equal to the unreduced fraction
-        # Example: '15x = 3'  >>  'x = \frac{3}{15}'
         result_steps.append(
             Step(
+                # Show the equation unchanged and the explanation announcement
                 before = f"{final_left_latex} = {final_right_latex}",
-                after = f"x = {unreduced_fraction}",
+                after = f"\\frac{{{sp.latex(coefficient_rational)}}}{{{sp.latex(coefficient_rational)}}} x" 
+                        f"= {final_right_latex} : {sp.latex(coefficient_rational)}"
             )
         )
 
-        # Step 3: simplify the fraction only if it actually changed after reduction
-        # Example: '\frac{3}{15}'  !=  '\frac{1}{5}'  >>  emit the simplification step
-        #          '\frac{1}{5}'   ==  '\frac{1}{5}'  >>  skip, already in lowest terms
-        if reduced_fraction != unreduced_fraction:
-            result_steps.append(
-                Step(
-                    before = f"x = {unreduced_fraction}",
-                    after = f"x = {reduced_fraction}",
-                )
+        
+        result_steps.append(
+            Step(
+                # Show the equation unchanged and the explanation announcement
+                before = f"\\frac{{{sp.latex(coefficient_rational)}}}{{{sp.latex(coefficient_rational)}}} x" 
+                        f"= {final_right_latex} : {sp.latex(coefficient_rational)}",
+                after = f"x = {final_right_latex} \\cdot \\frac{1}{{{sp.latex(coefficient_rational)}}}"
             )
+        )
+       
+        numerador = constant_rational.p
+        denominador = constant_rational.q
+
+        result_steps.append(
+            Step(
+                # Show the equation unchanged and the explanation announcement
+                before = f"x = {final_right_latex} \\cdot \\frac{1}{{{sp.latex(coefficient_rational)}}}",
+                after = f"x = \\frac{{{numerador} \\cdot {1}}}{{{denominador} \\cdot {sp.latex(coefficient_rational)}}}"
+            )
+        )
+
+        result_steps.append(
+            Step(
+                # Show the equation unchanged and the explanation announcement
+                before = f"x = \\frac{{{numerador} \\cdot {1}}}{{{denominador} \\cdot {sp.latex(coefficient_rational)}}}",
+                after = f"x = \\frac{{{numerador * 1}}}{{{denominador * coefficient_rational}}}"
+            )
+        )
+
+
+        
 
     # Return the list of animation steps and the exact numeric solution
     return result_steps, solution
