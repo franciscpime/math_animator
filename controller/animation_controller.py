@@ -65,7 +65,10 @@ class AnimationController:
         )
 
         for i, step in enumerate(steps):
+            print("-" * 30)
+            print()
             print(f"Step {i}: before={repr(step.before)} | after={repr(step.after)} | explanation={repr(step.explanation)}")
-        
+            print()
+            
         self.renderer.animate(steps)
 

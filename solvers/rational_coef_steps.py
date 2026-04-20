@@ -92,7 +92,7 @@ def rational_coef_solve_steps(
 
     # Build the full equation string showing the unevaluated multiplication
     # Example: '-x = \frac{25 \cdot 5}{2}'
-    eq_after_multiply_unevaluated = f"{left_without_denominator} = {right_side_product_unevaluated}"
+    eq_after_multiply_unevaluated = f"{coef_denominator} \\cdot {final_left_latex} = {right_side_product_unevaluated}"
 
     # Emit the step showing the unevaluated multiplication on the right side
     result_steps.append(
@@ -131,14 +131,7 @@ def rational_coef_solve_steps(
         # Nothing changed -- keep the unevaluated form as the current state
         eq_after_multiply_evaluated = eq_after_multiply_unevaluated
 
-    # Announce the upcoming division before showing the result
-    result_steps.append(
-        Step(
-            before=eq_after_multiply_evaluated,
-            after=eq_after_multiply_evaluated,
-            explanation=f"Divide both sides by {coef_numerator}",
-        )
-    )
+
 
     # ---------------------------------------------------------------
     # Step 2: divide both sides by p to isolate x
@@ -152,7 +145,7 @@ def rational_coef_solve_steps(
     # Example: costante_denominator = 1  >> '\frac{125}{-1}'
     #          costante_denominator = 2  >> '\frac{125}{2 * -1}' >> '\frac{125}{-2}'
     if costante_denominator == 1:
-        right_side_divided = f"\\frac{{{numerator_product}}}{{{coef_numerator}}}"
+        right_side_divided = f"{numerator_product}"
     else:
         right_side_divided = f"\\frac{{{numerator_product}}}{{{costante_denominator * coef_numerator}}}"
 
@@ -160,16 +153,50 @@ def rational_coef_solve_steps(
     # Example: 'x = \frac{125}{-2}'
     eq_after_divide_unevaluated = f"x = {right_side_divided}"
 
-    # Emit the step showing x equal to the unevaluated fraction
-    result_steps.append(
-        Step(
-            before=eq_after_multiply_evaluated,
-            after=eq_after_divide_unevaluated
-        )
-    )
 
     # Example: Rational(-125, 2)  >>  '-\frac{125}{2}'
     eq_solution_simplified = f"x = {sp.latex(solution)}"
+
+    if coef_numerator == 1:
+        # Emit the step showing x equal to the unevaluated fraction
+        result_steps.append(
+            Step(
+                before=eq_after_multiply_evaluated,
+                after=eq_after_divide_unevaluated
+            )
+        )
+
+        result_steps.append(
+            Step(
+                before=eq_after_divide_unevaluated,
+                after=eq_solution_simplified
+            )
+        )
+
+    else:
+        # Announce the upcoming division before showing the result
+        result_steps.append(
+            Step(
+                before=eq_after_multiply_evaluated,
+                after=eq_after_multiply_evaluated,
+                explanation=f"Divide both sides by {coef_numerator}",
+            )
+        )
+
+        # Emit the step showing x equal to the unevaluated fraction
+        result_steps.append(
+            Step(
+                before=eq_after_multiply_evaluated,
+                after=eq_after_divide_unevaluated
+            )
+        )
+
+        result_steps.append(
+            Step(
+                before=eq_after_divide_unevaluated,
+                after=eq_solution_simplified
+            )
+        )
 
     # Only emit the simplification step if the fraction actually changed
     # Example: 'x = \frac{125}{-2}' != 'x = -\frac{125}{2}' >> emit the step
@@ -180,5 +207,8 @@ def rational_coef_solve_steps(
                 after=eq_solution_simplified
             )
         )
+
+    # print(f"numerator product: {numerator_product}")
+    
 
     return result_steps, solution

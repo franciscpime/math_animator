@@ -208,6 +208,12 @@ def integer_coef_solve_steps(
             )
         )
 
+        # result_steps.append(
+        #     Step(
+        #         beore = f"x = \\frac{{{numerador * 1}}}{{{denominador * coefficient_rational}}}",
+        #         after = ""
+        #     )
+        # )
 
         
 
