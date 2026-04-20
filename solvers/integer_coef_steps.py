@@ -121,9 +121,18 @@ def integer_coef_solve_steps(
                 # Show the equation unchanged -- this step is just the explanation announcement
                 before = f"{sp.latex(left_after_division)} = {sp.latex(right_after_division)}",
                 after = f"{sp.latex(left_after_division)} = {sp.latex(right_after_division)}",
-                explanation = f"Divide both sides by {sp.latex(simplified_coef)}",
+                explanation = f"Divide both sides by {sp.latex(simplified_coef)}"
             )
         )
+
+        result_steps.append(
+            Step(
+                # Show the equation unchanged -- this step is just the explanation announcement
+                before = f"{sp.latex(left_after_division)} = {sp.latex(right_after_division)}",
+                after = f"\\frac{{{sp.latex(left_after_division)}}}{{{simplified_coef}}} = \\frac{{{sp.latex(right_after_division)}}}{{{simplified_coef}}}"
+            )
+        )
+
 
         # Compute the exact final solution as a SymPy Rational
         # Example: Rational(8, 12)  >>  2/3
@@ -133,7 +142,7 @@ def integer_coef_solve_steps(
         # Example: '3x = 2'  >>  'x = 2/3'
         result_steps.append(
             Step(
-                before = f"{sp.latex(left_after_division)} = {sp.latex(right_after_division)}",
+                before = f"\\frac{{{sp.latex(left_after_division)}}}{{{simplified_coef}}} = \\frac{{{sp.latex(right_after_division)}}}{{{simplified_coef}}}",
                 after = f"x = {sp.latex(solution)}",
             )
         )
@@ -208,12 +217,12 @@ def integer_coef_solve_steps(
             )
         )
 
-        # result_steps.append(
-        #     Step(
-        #         beore = f"x = \\frac{{{numerador * 1}}}{{{denominador * coefficient_rational}}}",
-        #         after = ""
-        #     )
-        # )
+        result_steps.append(
+            Step(
+                before = f"x = \\frac{{{numerador * 1}}}{{{denominador * coefficient_rational}}}",
+                after = f"x = {solution}"
+            )
+        )
 
         
 

@@ -60,5 +60,7 @@ def rearrange_terms(left, right):
     for term in left_const:
         constant_terms.append(-term)
 
-    return x_terms, constant_terms
+    already_organised = not right_x and not left_const
+
+    return x_terms, constant_terms, already_organised
 

@@ -899,7 +899,7 @@ def check_solution(final_value, final_latex, equation, steps):
         Step(
             before = equation_display,
             after = equation_display,
-            explanation = f"Now substitute x for {final_latex}"
+            explanation = f"Now replace x for {final_latex}"
         )
     )
 

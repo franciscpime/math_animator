@@ -159,28 +159,29 @@ def solve_linear(equation: str):
     # ------------------------------------------------------------------
 
     # Delegate the term separation and sign-flipping to the dedicated utility
-    variable_terms, constant_terms = rearrange_terms(left, right)
+    variable_terms, constant_terms, already_organised = rearrange_terms(left, right)
 
     # Build the LaTeX equation string showing all terms in their new positions
     # Example: variable_terms=[2x], constant_terms=[6]  >>  '2 x = 6'
     new_eq = build_equation(variable_terms, constant_terms)
 
-    # Announce the rearrangement before showing the result
-    steps.append(
-        Step(
-            before = equation_display,
-            after = equation_display,
-            explanation = "Rearrange terms",
+    if not already_organised:
+        # Announce the rearrangement before showing the result
+        steps.append(
+            Step(
+                before = equation_display,
+                after = equation_display,
+                explanation = "Rearrange terms",
+            )
         )
-    )
 
-    # Show the equation after rearranging all terms
-    steps.append(
-        Step(
-            before = equation_display,
-            after = new_eq,
+        # Show the equation after rearranging all terms
+        steps.append(
+            Step(
+                before = equation_display,
+                after = new_eq,
+            )
         )
-    )
 
     # ------------------------------------------------------------------
     # Simplify variable terms step by step.
@@ -232,7 +233,7 @@ def solve_linear(equation: str):
             steps.append(
                 Step(
                     before = build_equation(current_vars, constant_terms),
-                    after = build_equation(new_vars, constant_terms),
+                    after = build_equation(new_vars, constant_terms)
                 )
             )
 
