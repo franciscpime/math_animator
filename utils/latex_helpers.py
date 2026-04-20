@@ -10,9 +10,25 @@ This function converts an equation string to a LaTeX display format.
 Example: '1/2 x + 3 = 7/4'  >>  '\\frac{1}{2} x + 3 = \\frac{7}{4}'
 '''
 def equation_to_latex_display(equation):
+
+    def replace_fraction(m):
+        numerator = m.group(1)
+        denominator = m.group(2)
+        has_x = m.group(3) == "x"
+
+        if has_x:
+            if numerator == "1":
+                return r"\frac{x}{" + denominator + r"}"
+            elif numerator == "-1":
+                return r"- \frac{x}{" + denominator + r"}"  
+            else:
+                return r"\frac{" + numerator + "x" + r"}{" + denominator + r"}"
+        else:
+            return r"\frac{" + numerator + r"}{" + denominator + r"}"
+
     return re.sub(
-        r"(?<!\\\\)(-?\d+)/(\d+)",
-        lambda m: r"\frac{" + m.group(1) + r"}{" + m.group(2) + r"}",
+        r"(?<!\\\\)(-?\d+)/(\d+)(x?)",
+        replace_fraction,
         equation,
     )
 

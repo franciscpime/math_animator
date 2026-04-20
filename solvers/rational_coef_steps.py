@@ -92,7 +92,10 @@ def rational_coef_solve_steps(
 
     # Build the full equation string showing the unevaluated multiplication
     # Example: '-x = \frac{25 \cdot 5}{2}'
-    eq_after_multiply_unevaluated = f"{coef_denominator} \\cdot {final_left_latex} = {right_side_product_unevaluated}"
+    if coef_rational < 0:
+        eq_after_multiply_unevaluated = f"{coef_denominator} \\cdot ({final_left_latex}) = {right_side_product_unevaluated}"
+    else:
+        eq_after_multiply_unevaluated = f"{coef_denominator} \\cdot {final_left_latex} = {right_side_product_unevaluated}"
 
     # Emit the step showing the unevaluated multiplication on the right side
     result_steps.append(
@@ -145,13 +148,13 @@ def rational_coef_solve_steps(
     # Example: costante_denominator = 1  >> '\frac{125}{-1}'
     #          costante_denominator = 2  >> '\frac{125}{2 * -1}' >> '\frac{125}{-2}'
     if costante_denominator == 1:
-        right_side_divided = f"{numerator_product}"
+        right_side_divided = f"\\frac{{{numerator_product}}}{{{coef_numerator}}}"
     else:
         right_side_divided = f"\\frac{{{numerator_product}}}{{{costante_denominator * coef_numerator}}}"
 
     # Build the full equation string showing the unevaluated division
     # Example: 'x = \frac{125}{-2}'
-    eq_after_divide_unevaluated = f"x = {right_side_divided}"
+    eq_after_divide_unevaluated = f"\\frac{{{final_left_latex}}}{{{coef_numerator}}} = {right_side_divided}"
 
 
     # Example: Rational(-125, 2)  >>  '-\frac{125}{2}'
