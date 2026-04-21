@@ -152,6 +152,12 @@ def combine_terms_stepwise(terms):
         if not all_same:
             steps.append(("__latex__", grouped_numerator, new_terms.copy()))
 
+            running = adjusted_numerators[0]
+
+            for i in adjusted_numerators[1:]:
+                running = running + i
+                
+
         # Step C: let SymPy evaluate and simplify the final combined x-term
         # Example: Rational(-1, 5) * x  >>  -x/5
         combined = sp.Rational(numerator_sum, common_denominator) * x

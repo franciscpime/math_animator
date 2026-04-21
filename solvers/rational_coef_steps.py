@@ -154,7 +154,7 @@ def rational_coef_solve_steps(
 
     # Build the full equation string showing the unevaluated division
     # Example: 'x = \frac{125}{-2}'
-    eq_after_divide_unevaluated = f"\\frac{{{final_left_latex}}}{{{coef_numerator}}} = {right_side_divided}"
+    eq_after_divide_unevaluated = f"\\frac{{{left_without_denominator}}}{{{coef_numerator}}} = {right_side_divided}"
 
 
     # Example: Rational(-125, 2)  >>  '-\frac{125}{2}'
