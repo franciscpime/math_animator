@@ -154,9 +154,26 @@ def combine_terms_stepwise(terms):
 
             running = adjusted_numerators[0]
 
-            for i in adjusted_numerators[1:]:
+            for idx, i in enumerate(adjusted_numerators[1:], start=1):
+                remaining = adjusted_numerators[idx+1:]
+
+                expr_numbers = [running + i] + remaining
+
+                joined_expr = " + ".join(str(n) for n in expr_numbers)
+                joined_expr = re.sub(r'\+\s*-', '- ', joined_expr)
+
+                if joined_expr == "1":
+                    joined_expr = "x"
+                    step_expr = fr"\frac{{{joined_expr}}}{{{common_denominator}}}"
+                if joined_expr == "-1":
+                    joined_expr = "-x"
+                    step_expr = fr"\frac{{{joined_expr}}}{{{common_denominator}}}"
+                else:
+                    step_expr = fr"\frac{{({joined_expr}) x}}{{{common_denominator}}}"
+
+                steps.append(("__latex__", step_expr, new_terms.copy()))
+
                 running = running + i
-                
 
         # Step C: let SymPy evaluate and simplify the final combined x-term
         # Example: Rational(-1, 5) * x  >>  -x/5
@@ -266,6 +283,21 @@ def combine_terms_stepwise(terms):
         # Only emit Step B when denominators were actually different (Step A ran)
         if not all_same_denominator:
             steps.append(("__latex__", grouped_const_numerator, new_terms.copy()))
+
+            running = adjusted_const_numerators[0]
+
+            for idx, i in enumerate(adjusted_const_numerators[1:], start=1):
+                remaining = adjusted_const_numerators[idx+1:]
+
+                expr_numbers = [running + i] + remaining
+
+                joined_expr = " + ".join(str(n) for n in expr_numbers)
+                joined_expr = re.sub(r'\+\s*-', '- ', joined_expr)
+
+                step_expr = fr"\frac{{{joined_expr}}}{{{common_denominator_const}}}"
+                steps.append(("__latex__", step_expr, new_terms.copy()))
+
+                running = running + i
 
         # Step C: let SymPy evaluate and simplify the final combined constant
         # Example: Rational(15, 2)  >>  15/2

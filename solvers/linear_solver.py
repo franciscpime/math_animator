@@ -76,21 +76,10 @@ def solve_linear(equation: str):
             # Only emit a step if something actually changed
             if before_eq != after_eq:
 
-                # First transition: converting the decimal to an unreduced fraction
-                # Example: '0.5'  >>  '\frac{5}{10}'
-                if i == 1:
-                    current_explanation = "Convert decimal to fraction"
-
-                # Subsequent transitions: reducing the fraction
-                # Example: '\frac{5}{10}'  >>  '\frac{1}{2}'
-                else:
-                    current_explanation = "Simplify fraction"
-
                 steps.append(
                     Step(
                         before = before_eq,
-                        after = after_eq,
-                        explanation = current_explanation,
+                        after = after_eq
                     )
                 )
 
