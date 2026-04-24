@@ -9,6 +9,8 @@ def normalize_expression(expr):
     # Replace commas with dots: 0,9 >> 0.9
     expr = re.sub(r'(\d),(\d)', r'\1.\2', expr)
 
+    expr = re.sub(r'-?\d+\.\d+', lambda m: str(sp.Rational(m.group(0))), expr)
+
     # Replace "^" with "**"
     expr = expr.replace("^", "**")
 

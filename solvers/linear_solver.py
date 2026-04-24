@@ -158,8 +158,8 @@ def solve_linear(equation: str):
         # Announce the rearrangement before showing the result
         steps.append(
             Step(
-                before = equation_display,
-                after = equation_display,
+                before = current_eq_display,
+                after = current_eq_display,
                 explanation = "Rearrange terms",
             )
         )
@@ -167,7 +167,7 @@ def solve_linear(equation: str):
         # Show the equation after rearranging all terms
         steps.append(
             Step(
-                before = equation_display,
+                before = current_eq_display,
                 after = new_eq,
             )
         )
