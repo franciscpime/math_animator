@@ -7,7 +7,7 @@ import re
 class EquationRenderer:
     def __init__(self, scene: Scene):
         self.scene = scene
-        self.tex = None
+        self.tex = None                 # save the current visual object on the screen
 
     def _format_explanation(self, text: str) -> str:
         """Envolve comandos LaTeX em $...$ para compilação correcta pelo Tex()."""
@@ -18,7 +18,7 @@ class EquationRenderer:
         )
 
     def _make_tex(self, latex_str: str) -> MathTex:
-        """Cria um MathTex redimensionado para caber no ecrã."""
+        # Remove double or multiple spaces from a LaTeX string
         latex_str = re.sub(r'  +', ' ', latex_str)
         tex = MathTex(latex_str)
         max_width  = config.frame_width  * 0.9
@@ -35,10 +35,10 @@ class EquationRenderer:
         Cria o mobject de explicação adequado consoante o conteúdo.
 
         Regras:
-          - Só LaTeX puro (ex: 'x = \\frac{24}{5} \\approx 4.8') → MathTex
+          - Só LaTeX puro (ex: 'x = \\frac{24}{5} \\approx 4.8') >> MathTex
           - Texto misto com LaTeX embutido (ex: 'Substituir x por \\frac{24}{5}')
-            → Tex com _format_explanation (envolve LaTeX em $...$)
-          - Texto simples → Tex
+            >> Tex com _format_explanation (envolve LaTeX em $...$)
+          - Texto simples >> Tex
         """
         # Detectar se é LaTeX puro: começa com \, x = ..., ou só tem LaTeX
         pure_latex = bool(re.match(r'^[x\s\\$=\d\{\}\^_\+\-\*/\.]+$', text.strip()))
@@ -47,7 +47,7 @@ class EquationRenderer:
             # LaTeX puro — usar MathTex
             return self._make_tex(text).scale(0.7)
         elif re.search(r'\\[a-zA-Z]', text):
-            # Texto misto com comandos LaTeX — usar Tex com $...$
+            # Texto misto com comandos LaTeX - usar Tex com $...$
             formatted = self._format_explanation(text)
             return Tex(formatted).scale(0.9)
         else:
