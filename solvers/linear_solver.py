@@ -9,7 +9,7 @@ from utils.latex_helpers import equation_to_latex_display, decimal_str
 from utils.simplification_steps import fraction_simplification_steps, decimal_simplification_steps
 from utils.term_rearranger import rearrange_terms
 from utils.term_combiner import combine_terms_stepwise
-from math_animator.utils.guess_checker import guess_checker
+from utils.guess_checker import guess
 from utils.equation_builder import build_equation
 from solvers.rational_coef_steps import rational_coef_solve_steps
 from solvers.integer_coef_steps import integer_coef_solve_steps
