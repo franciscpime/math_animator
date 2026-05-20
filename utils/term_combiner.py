@@ -140,13 +140,19 @@ def combine_terms_stepwise(terms):
         numerators_joined = re.sub(r'\+\s*-', '- ', numerators_joined)
 
         # Wrap in a \frac if the common denominator is greater than 1
-        # Example: common_denominator=5  >>  '\frac{(10 + 4 - 15) x}{5}'
+        # Example: common_denominator = 5  >>  '\frac{(10 + 4 - 15) x}{5}'
         if common_denominator > 1:
-            grouped_numerator = fr"\frac{{({numerators_joined}) x}}{{{common_denominator}}}"
+            if " + " in numerators_joined or " - " in numerators_joined:
+                grouped_numerator = fr"\frac{{({numerators_joined}) x}}{{{common_denominator}}}"
+            else:
+                grouped_numerator = fr"\frac{{{numerators_joined} x}}{{{common_denominator}}}"
         else:
-            # Denominator is 1 -- no fraction needed, just show the sum of numerators
-            # Example: '(10 + 4 - 15) x'
-            grouped_numerator = f"({numerators_joined}) x"
+            if " + " in numerators_joined or " - " in numerators_joined:
+                # Denominator is 1 -- no fraction needed, just show the sum of numerators
+                # Example: '(10 + 4 - 15) x'
+                grouped_numerator = f"({numerators_joined}) x"
+            else:
+                grouped_numerator = f"{numerators_joined} x"
 
         # Only emit Step B when denominators were actually different (Step A ran)
         if not all_same:
@@ -169,9 +175,13 @@ def combine_terms_stepwise(terms):
                     joined_expr = "-x"
                     step_expr = fr"\frac{{{joined_expr}}}{{{common_denominator}}}"
                 else:
-                    step_expr = fr"\frac{{({joined_expr}) x}}{{{common_denominator}}}"
+                    if " + " in numerators_joined or " - " in numerators_joined:
+                        step_expr = fr"\frac{{({joined_expr}) x}}{{{common_denominator}}}"
+                    else:
+                        step_expr = fr"\frac{{{joined_expr} x}}{{{common_denominator}}}"
 
-                steps.append(("__latex__", step_expr, new_terms.copy()))
+                if remaining:  
+                    steps.append(("__latex__", step_expr, new_terms.copy()))
 
                 running = running + i
 

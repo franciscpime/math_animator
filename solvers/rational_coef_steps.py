@@ -51,89 +51,96 @@ def rational_coef_solve_steps(
     # Example: '-\frac{x}{5} = \frac{25}{2}'
     eq_before_multiply = f"{final_left_latex} = {final_right_latex}"
 
-    # Announce the upcoming multiplication before showing the result
-    result_steps.append(
-        Step(
-            before=eq_before_multiply,
-            after=eq_before_multiply,
-            explanation=f"Multiply both sides by {coef_denominator}",
-        )
-    )
-
-    # ---------------------------------------------------------------
-    # Step 1: multiply both sides by q to clear the fraction
-    # Example: (-1/5)x = 25/2  >>  multiply by 5  >>  -x = 25*5/2
-    # ---------------------------------------------------------------
-
-    # Build the left side after multiplying by q 
-    # Example: coef_numerator = -1, x >> '-x'
-    left_without_denominator = sp.latex(sp.Integer(coef_numerator) * x)
-
-    # Extract numerator and denominator of the right-hand side constant
-    # Example: const_rational = 25/2  >>  costante_numerator = 25, costante_denominator = 2
-    costante_numerator = right_side_constant.p
-    costante_denominator = right_side_constant.q
-
-    # Wrap a negative right-hand numerator in parentheses for visual clarity
-    # Example: costante_numerator = -25  >>  cn_str = '(-25)'
-    #          costante_numerator = 25   >>  cn_str = '25'
-    if costante_numerator < 0:
-        costante_numerator_str = f"({costante_numerator})"
-    else:
-        costante_numerator_str = str(costante_numerator)
-
-    # Build the right side showing the multiplication before evaluating it
-    # Example: costante_denominator = 1  >> '25 \cdot 5'
-    #          costante_denominator = 2  >> '\frac{25 \cdot 5}{2}'
-    if costante_denominator == 1:
-        right_side_product_unevaluated = f"{costante_numerator_str} \\cdot {coef_denominator}"
-    else:
-        right_side_product_unevaluated = f"\\frac{{{costante_numerator_str} \\cdot {coef_denominator}}}{{{costante_denominator}}}"
-
-    # Build the full equation string showing the unevaluated multiplication
-    # Example: '-x = \frac{25 \cdot 5}{2}'
-    if coef_rational < 0:
-        eq_after_multiply_unevaluated = f"{coef_denominator} \\cdot ({final_left_latex}) = {right_side_product_unevaluated}"
-    else:
-        eq_after_multiply_unevaluated = f"{coef_denominator} \\cdot {final_left_latex} = {right_side_product_unevaluated}"
-
-    # Emit the step showing the unevaluated multiplication on the right side
-    result_steps.append(
-        Step(
-            before=eq_before_multiply,
-            after=eq_after_multiply_unevaluated
-        )
-    )
-
-    # Evaluate the product costante_numerator * coef_denominator
-    # Example: 25 * 5  >>  numerator_product = 125
-    numerator_product = costante_numerator * coef_denominator
-
-    # Build the right side with the product now evaluated
-    # Example: costante_denominator = 1  >> '125'
-    #          costante_denominator = 2  >> '\frac{125}{2}'
-    if costante_denominator == 1:
-        right_side_product_evaluated = str(numerator_product)
-    else:
-        right_side_product_evaluated = sp.latex(sp.Rational(numerator_product, costante_denominator))
-
-    # Build the full equation string with the evaluated product
-    # Example: '-x = \frac{125}{2}'
-    eq_after_multiply_evaluated = f"{left_without_denominator} = {right_side_product_evaluated}"
-
-    # Only emit this step if something actually changed after evaluation
-    # Example: '\frac{25 \cdot 5}{2}'  !=  '\frac{125}{2}'  >>  emit the step
-    if eq_after_multiply_evaluated != eq_after_multiply_unevaluated:
+    if coef_denominator != 1:
+        # Announce the upcoming multiplication before showing the result
         result_steps.append(
             Step(
-                before=eq_after_multiply_unevaluated, 
-                after=eq_after_multiply_evaluated
+                before=eq_before_multiply,
+                after=eq_before_multiply,
+                explanation=f"Multiply both sides by {coef_denominator}",
             )
         )
-    else:
-        # Nothing changed -- keep the unevaluated form as the current state
-        eq_after_multiply_evaluated = eq_after_multiply_unevaluated
 
+        # ---------------------------------------------------------------
+        # Step 1: multiply both sides by q to clear the fraction
+        # Example: (-1/5)x = 25/2  >>  multiply by 5  >>  -x = 25*5/2
+        # ---------------------------------------------------------------
+
+        # Build the left side after multiplying by q 
+        # Example: coef_numerator = -1, x >> '-x'
+        left_without_denominator = sp.latex(sp.Integer(coef_numerator) * x)
+
+        # Extract numerator and denominator of the right-hand side constant
+        # Example: const_rational = 25/2  >>  costante_numerator = 25, costante_denominator = 2
+        costante_numerator = right_side_constant.p
+        costante_denominator = right_side_constant.q
+
+        # Wrap a negative right-hand numerator in parentheses for visual clarity
+        # Example: costante_numerator = -25  >>  cn_str = '(-25)'
+        #          costante_numerator = 25   >>  cn_str = '25'
+        if costante_numerator < 0:
+            costante_numerator_str = f"({costante_numerator})"
+        else:
+            costante_numerator_str = str(costante_numerator)
+
+        # Build the right side showing the multiplication before evaluating it
+        # Example: costante_denominator = 1  >> '25 \cdot 5'
+        #          costante_denominator = 2  >> '\frac{25 \cdot 5}{2}'
+        if costante_denominator == 1:
+            right_side_product_unevaluated = f"{costante_numerator_str} \\cdot {coef_denominator}"
+        else:
+            right_side_product_unevaluated = f"\\frac{{{costante_numerator_str} \\cdot {coef_denominator}}}{{{costante_denominator}}}"
+
+        # Build the full equation string showing the unevaluated multiplication
+        # Example: '-x = \frac{25 \cdot 5}{2}'
+        if coef_rational < 0:
+            eq_after_multiply_unevaluated = f"{coef_denominator} \\cdot ({final_left_latex}) = {right_side_product_unevaluated}"
+        else:
+            eq_after_multiply_unevaluated = f"{coef_denominator} \\cdot {final_left_latex} = {right_side_product_unevaluated}"
+
+        # Emit the step showing the unevaluated multiplication on the right side
+        result_steps.append(
+            Step(
+                before=eq_before_multiply,
+                after=eq_after_multiply_unevaluated
+            )
+        )
+
+        # Evaluate the product costante_numerator * coef_denominator
+        # Example: 25 * 5  >>  numerator_product = 125
+        numerator_product = costante_numerator * coef_denominator
+
+        # Build the right side with the product now evaluated
+        # Example: costante_denominator = 1  >> '125'
+        #          costante_denominator = 2  >> '\frac{125}{2}'
+        if costante_denominator == 1:
+            right_side_product_evaluated = str(numerator_product)
+        else:
+            right_side_product_evaluated = sp.latex(sp.Rational(numerator_product, costante_denominator))
+
+        # Build the full equation string with the evaluated product
+        # Example: '-x = \frac{125}{2}'
+        eq_after_multiply_evaluated = f"{left_without_denominator} = {right_side_product_evaluated}"
+
+        # Only emit this step if something actually changed after evaluation
+        # Example: '\frac{25 \cdot 5}{2}'  !=  '\frac{125}{2}'  >>  emit the step
+        if eq_after_multiply_evaluated != eq_after_multiply_unevaluated:
+            result_steps.append(
+                Step(
+                    before=eq_after_multiply_unevaluated, 
+                    after=eq_after_multiply_evaluated
+                )
+            )
+        else:
+            # Nothing changed -- keep the unevaluated form as the current state
+            eq_after_multiply_evaluated = eq_after_multiply_unevaluated
+    
+    else:
+        eq_after_multiply_evaluated = eq_before_multiply
+        left_without_denominator = sp.latex(sp.Integer(coef_numerator) * x)
+        costante_numerator = right_side_constant.p
+        costante_denominator = right_side_constant.q
+        numerator_product = costante_numerator
 
 
     # ---------------------------------------------------------------
@@ -169,15 +176,17 @@ def rational_coef_solve_steps(
             )
         )
 
-        result_steps.append(
-            Step(
-                before=eq_after_divide_unevaluated,
-                after=eq_solution_simplified
+        # Only emit the simplification step if the fraction actually changed
+        # Example: 'x = \frac{125}{-2}' != 'x = -\frac{125}{2}' >> emit the step
+        if eq_solution_simplified != eq_after_divide_unevaluated:
+            result_steps.append(
+                Step(
+                    before=eq_after_divide_unevaluated,
+                    after=eq_solution_simplified
+                )
             )
-        )
 
     else:
-        # Announce the upcoming division before showing the result
         result_steps.append(
             Step(
                 before=eq_after_multiply_evaluated,
@@ -186,7 +195,6 @@ def rational_coef_solve_steps(
             )
         )
 
-        # Emit the step showing x equal to the unevaluated fraction
         result_steps.append(
             Step(
                 before=eq_after_multiply_evaluated,
@@ -194,24 +202,13 @@ def rational_coef_solve_steps(
             )
         )
 
-        result_steps.append(
-            Step(
-                before=eq_after_divide_unevaluated,
-                after=eq_solution_simplified
+        if eq_solution_simplified != eq_after_divide_unevaluated:
+            result_steps.append(
+                Step(
+                    before=eq_after_divide_unevaluated,
+                    after=eq_solution_simplified
+                )
             )
-        )
-
-    # Only emit the simplification step if the fraction actually changed
-    # Example: 'x = \frac{125}{-2}' != 'x = -\frac{125}{2}' >> emit the step
-    if eq_solution_simplified != eq_after_divide_unevaluated:
-        result_steps.append(
-            Step(
-                before=eq_after_divide_unevaluated,
-                after=eq_solution_simplified
-            )
-        )
 
     # print(f"numerator product: {numerator_product}")
-    
-
     return result_steps, solution

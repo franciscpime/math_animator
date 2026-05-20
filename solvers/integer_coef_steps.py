@@ -225,6 +225,7 @@ def integer_coef_solve_steps(
         )
 
         
-
+    # print(f"constant_rational: {constant_rational}")
+    # print(f"coefficient_rational: {coefficient_rational}")
     # Return the list of animation steps and the exact numeric solution
     return result_steps, solution

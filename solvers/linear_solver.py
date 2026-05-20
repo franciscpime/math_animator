@@ -248,28 +248,24 @@ def solve_linear(equation: str):
         )
 
     # Walk through every intermediate state emitted by the stepwise combiner
-    for entry in combine_terms_stepwise(constant_terms):
+    current_display_eq = build_equation(current_vars, current_consts)
 
-        # Display-only intermediate step -- the LaTeX is provided directly
-        # by the combiner and the constant terms have NOT been updated yet
+    for entry in combine_terms_stepwise(constant_terms):
         if isinstance(entry, tuple) and entry[0] == "__latex__":
             _, const_latex, _state = entry
-
-            # Build the full equation using the current (not yet updated) constant terms
-            before_eq = build_equation(current_vars, current_consts)
-
-            # Extract the variable side as-is and pair it with the new constant LaTeX
-            var_side = before_eq.split("=")[0].strip()
+            var_side = current_display_eq.split("=")[0].strip()
             after_eq = f"{var_side} = {const_latex}"
 
-            # Only emit a step if something actually changed
-            if before_eq != after_eq:
+            if current_display_eq != after_eq:
                 steps.append(
                     Step(
-                        before = before_eq,
-                        after = after_eq,
+                        before = current_display_eq, 
+                        after = after_eq
                     )
                 )
+
+            current_display_eq = after_eq
+
 
         # Plain list entry -- the constant terms have been fully updated
         else:
@@ -278,7 +274,7 @@ def solve_linear(equation: str):
             # Show the transition from the old constant terms to the new combined term
             steps.append(
                 Step(
-                    before = build_equation(current_vars, current_consts),
+                    before = current_display_eq,
                     after = build_equation(current_vars, new_consts),
                 )
             )
@@ -338,8 +334,6 @@ def solve_linear(equation: str):
                 )
             )
 
-        # Verify the solution by substituting back into the original equation
-        check_solution(final_value, final_latex, equation, steps)
 
     # ------------------------------------------------------------------
     # Case 2: coefficient requires a division step.
@@ -359,7 +353,7 @@ def solve_linear(equation: str):
 
         # Sub-case 2a: fractional coefficient (e.g. -x/5 = 3).
         # Multiply both sides by the denominator first, then divide by the numerator.
-        if coefficient_rational.q > 1:
+        if coefficient_rational.q > 1 or constant_rational.q > 1:
             extra_steps, solution = rational_coef_solve_steps(
                 coefficient_rational,
                 constant_rational,
@@ -403,8 +397,6 @@ def solve_linear(equation: str):
                 )
             )
 
-        # Verify the solution by substituting back into the original equation
-        check_solution(final_value, final_latex, equation, steps)
 
     # Return the complete list of animation steps to the caller
     return steps
