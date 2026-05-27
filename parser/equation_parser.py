@@ -154,3 +154,24 @@ def detect_decimals(expr_str):
 
     return decimals
 
+"""
+Detect if the equation contains a division by zero.
+Returns (numerator_str, sign) if found, None otherwise.
+
+Example: '12x + 4/0 = 3'     >>  ('4', '+')
+            '12x - 4/0 = 3'  >>  ('4', '-')
+            '4/0 = 3'        >>  ('4', '+')
+            '12x + 3 = 5'    >>  None
+"""
+def detect_division_by_zero(equation: str):
+    
+    match = re.search(r'([+-])?\s*(\d+)\s*/\s*0', equation)
+    
+    if match:
+        sign = match.group(1) if match.group(1) else '+'
+        numerator = match.group(2)
+
+        return numerator, sign
+    
+    return None
+

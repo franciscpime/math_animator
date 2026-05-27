@@ -4,13 +4,14 @@ from parser.equation_parser import (
     parse_equation,
     detect_decimals,
     detect_raw_fractions,
+    detect_division_by_zero,
 )
 from utils.latex_helpers import equation_to_latex_display, decimal_str
 from utils.simplification_steps import fraction_simplification_steps, decimal_simplification_steps
 from utils.term_rearranger import rearrange_terms
 from utils.term_combiner import combine_terms_stepwise
-from utils.guess_checker import guess
 from utils.equation_builder import build_equation
+from utils.impossible_solution import impossible_solution_steps
 from solvers.rational_coef_steps import rational_coef_solve_steps
 from solvers.integer_coef_steps import integer_coef_solve_steps
 
@@ -32,6 +33,14 @@ def solve_linear(equation: str):
     # Parse the equation string into normalized left and right side strings
     # Example: '2x + 4 = 10'  >>  left = '2*x+4', right = '10'
     left, right = parse_equation(equation)
+
+    # Check for division by zero before any processing
+    result = detect_division_by_zero(equation)
+    if result:
+        numerator, sign = result
+        equation_display = equation_to_latex_display(equation)
+        
+        return impossible_solution_steps(numerator, sign, equation_display, equation)
 
     # Will hold all the animation steps to return to the caller
     steps = []

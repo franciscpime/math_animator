@@ -8,7 +8,7 @@ class SolveScene(Scene):
         if mode == "guess":
             x_value = input("x = ").strip()  
         else: 
-            None
+            x_value = None
         controller = AnimationController(self)
         controller.run(equation, mode, x_value)
 
