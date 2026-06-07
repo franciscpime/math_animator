@@ -1,7 +1,6 @@
 import math
 import sympy as sp
 
-
 '''
 This function returns the steps to simplify a fraction.
 

@@ -142,7 +142,8 @@ def integer_coef_solve_steps(
         # Example: '3x = 2'  >>  'x = 2/3'
         result_steps.append(
             Step(
-                before = f"\\frac{{{sp.latex(left_after_division)}}}{{{simplified_coef}}} = \\frac{{{sp.latex(right_after_division)}}}{{{simplified_coef}}}",
+                before = f"\\frac{{{sp.latex(left_after_division)}}}{{{simplified_coef}}} ="
+                         f"\\frac{{{sp.latex(right_after_division)}}}{{{simplified_coef}}}",
                 after = f"x = {sp.latex(solution)}",
             )
         )
@@ -183,8 +184,16 @@ def integer_coef_solve_steps(
             Step(
                 # Show the equation unchanged and the explanation announcement
                 before = f"{final_left_latex} = {final_right_latex}",
-                after = f"\\frac{{{sp.latex(coefficient_rational)}}}{{{sp.latex(coefficient_rational)}}} x" 
+                after = f"\\frac{{{sp.latex(coefficient_rational)} x}}{{{sp.latex(coefficient_rational)}}}" 
                         f"= {final_right_latex} : {sp.latex(coefficient_rational)}"
+            )
+        )
+
+        result_steps.append(
+            Step(
+                before = f"\\frac{{{sp.latex(coefficient_rational)} x}}{{{sp.latex(coefficient_rational)}}}" 
+                         f"= {final_right_latex} : {sp.latex(coefficient_rational)}",
+                after = f"x = {final_right_latex} : {sp.latex(coefficient_rational)}"
             )
         )
 
@@ -192,7 +201,7 @@ def integer_coef_solve_steps(
         result_steps.append(
             Step(
                 # Show the equation unchanged and the explanation announcement
-                before = f"\\frac{{{sp.latex(coefficient_rational)}}}{{{sp.latex(coefficient_rational)}}} x" 
+                before = f"\\frac{{{sp.latex(coefficient_rational)} x}}{{{sp.latex(coefficient_rational)}}}"
                         f"= {final_right_latex} : {sp.latex(coefficient_rational)}",
                 after = f"x = {final_right_latex} \\cdot \\frac{1}{{{sp.latex(coefficient_rational)}}}"
             )

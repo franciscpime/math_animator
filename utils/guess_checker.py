@@ -5,6 +5,7 @@ from math import lcm as _mlcm
 from functools import reduce as _freduce
 from models.step import Step
 from parser.equation_parser import normalize_expression
+from utils.simplification_steps import decimal_simplification_steps
 
 x = sp.symbols("x")
 
@@ -866,7 +867,7 @@ Animation sequence:
     5. Simplify the right side arithmetic step by step.
     6. Show a confirmation message (correct / does not satisfy).
 """
-def check_solution(final_value, final_latex, equation, steps):
+def check_solution(final_value, final_latex, equation, steps, x_value_str=None):
     
     left_str, right_str = equation.split("=")
     left_sym  = sp.sympify(normalize_expression(left_str.strip()), evaluate=False)
@@ -889,9 +890,8 @@ def check_solution(final_value, final_latex, equation, steps):
 
     steps.append(
         Step(
-            before = f"x = {final_latex}",
-            after = equation_display,
-            explanation = "Let's verify!"
+            before = equation_display,
+            after = equation_display
         )
     )
 
@@ -899,7 +899,7 @@ def check_solution(final_value, final_latex, equation, steps):
         Step(
             before = equation_display,
             after = equation_display,
-            explanation = f"Now replace x for {final_latex}"
+            explanation = f"Now replace x by {x_value_str}"
         )
     )
 
@@ -912,8 +912,15 @@ def check_solution(final_value, final_latex, equation, steps):
             expression,
         )
 
-    left_substituted  = _sub_x(left_display,  solution_latex)
-    right_substituted = _sub_x(right_display, solution_latex)
+    if x_value_str:
+        display_value = x_value_str
+    else:
+        display_value = solution_latex
+
+    unsimplified = decimal_simplification_steps(display_value)
+
+    left_substituted  = _sub_x(left_display,  display_value)
+    right_substituted = _sub_x(right_display, display_value)
 
     steps.append(
         Step(
@@ -921,6 +928,31 @@ def check_solution(final_value, final_latex, equation, steps):
             after = f"{left_substituted} = {right_substituted}"
         )
     )
+
+    current_left, current_right = left_substituted, right_substituted
+
+    if x_value_str and '.' in x_value_str:
+        unsimplified = decimal_simplification_steps(x_value_str)
+        for i in range(1, len(unsimplified)):
+            before_left = current_left
+            before_right = current_right
+
+            after_left = before_left.replace(unsimplified[i-1], unsimplified[i], 1)
+            after_right = before_right.replace(unsimplified[i-1], unsimplified[i], 1)
+
+            equation_before = f"{before_left} = {before_right}"
+            equation_after = f"{after_left} = {after_right}"
+
+            if equation_before != equation_after:
+                steps.append(
+                    Step(
+                        before = equation_before, 
+                        after = equation_after
+                    )
+                )
+                
+                current_left = after_left
+                current_right = after_right
 
     def _subst_terms(sympy_expression, x_value):
 
@@ -938,6 +970,9 @@ def check_solution(final_value, final_latex, equation, steps):
     left_unevaluated  = _subst_terms(left_sym,  final_value)
     right_unevaluated = _subst_terms(right_sym, final_value)
 
+    left_substituted = current_left
+    right_substituted = current_right
+
     left_tuples  = sympy_stepwise(left_substituted,  left_unevaluated,  final_value)
     right_tuples = sympy_stepwise(right_substituted, right_unevaluated, final_value)
 
@@ -953,8 +988,6 @@ def check_solution(final_value, final_latex, equation, steps):
 
     left_steps_v,  left_explanations  = _extract(left_tuples)
     right_steps_v, right_explanations = _extract(right_tuples)
-
-    current_left, current_right = left_substituted, right_substituted
 
     for i, left_after in enumerate(left_steps_v):
         current_explanation = left_explanations.get(i)
@@ -1010,15 +1043,26 @@ def check_solution(final_value, final_latex, equation, steps):
     right_orig = sp.sympify(normalize_expression(right_str.strip()), evaluate=False)
     is_true = sp.simplify(left_orig.subs(x, final_value) - right_orig.subs(x, final_value)) == 0
 
-    final_explanation = "The solution is correct!" if is_true else "The solution does not satisfy the equation."
+    if is_true:
+        final_explanation = "The solution is correct!"
 
-    steps.append(
-        Step(
-            before = f"{current_left} = {current_right}",
-            after = f"{current_left} = {current_right}",
-            explanation = final_explanation
+        steps.append(
+            Step(
+                before = f"{current_left} = {current_right}",
+                after = f"{current_left} = {current_right}",
+                explanation = final_explanation
+            )
         )
-    )
+    else:
+        final_explanation = "The solution does not satisfy the equation."    
+
+        steps.append(
+            Step(
+                before = f"{current_left} = {current_right}",
+                after = f"{current_left} \\neq {current_right}",
+                explanation = final_explanation
+            )
+        )
 
 
 def guess(equation, x_value_str):
@@ -1032,6 +1076,7 @@ def guess(equation, x_value_str):
     final_latex = sp.latex(final_value)
     
     steps = []
-    check_solution(final_value, final_latex, equation, steps)
+    check_solution(final_value, final_latex, equation, steps, x_value_str)
     
     return steps
+
