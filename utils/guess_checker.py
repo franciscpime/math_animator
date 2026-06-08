@@ -47,7 +47,7 @@ For an integer final_value:
       Step 2   sum numeric pairs left to right
         >>> example: 2 + 3  >>  5
 '''
-def sympy_stepwise(substituted_expression, sym_evaled, final_value):
+def sympy_stepwise(substituted_expression, sym_evaled, final_value, display_value=None):
     
     """
     Find all integers in a LaTeX expression string that are:
@@ -195,6 +195,11 @@ def sympy_stepwise(substituted_expression, sym_evaled, final_value):
         # Example: '-3'  >>  solution_latex_escaped = '\\-3'
         solution_latex_escaped = re.escape(solution_latex)
 
+        if display_value is not None:
+            solution_latex_escaped = re.escape(display_value)
+
+        solution_latex_simplified_escaped = re.escape(solution_latex)
+
         # Build the regex pattern that matches expressions like '2(3)' or '-4(3)'
         # i.e. an integer coefficient immediately followed by the solution in parentheses
         # Example: pattern matches '2(3)' in '2(3) + 5'
@@ -335,6 +340,11 @@ def sympy_stepwise(substituted_expression, sym_evaled, final_value):
     # Escape any special regex characters so the LaTeX string is safe to use in patterns
     solution_latex_escaped = re.escape(solution_latex)
 
+    solution_latex_escaped = re.escape(solution_latex)
+    if display_value is not None:
+        solution_latex_escaped = re.escape(display_value)
+    solution_latex_simplified_escaped = re.escape(solution_latex)
+
     # Wrap a negative numerator in parentheses for visual clarity in the display
     # Example: solution_numerator = -1  >>  solution_numerator_str = '(-1)'
     #          solution_numerator =  1  >>  solution_numerator_str = '1'
@@ -350,17 +360,25 @@ def sympy_stepwise(substituted_expression, sym_evaled, final_value):
 
     # Build the regex pattern that matches an integer coefficient followed by the solution in parentheses
     # Example: matches '2(\frac{1}{2})' in '2(\frac{1}{2}) + 3'
-    int_times_frac_pattern = r"(-?\s*\d+)\s*\(\s*" + solution_latex_escaped + r"\s*\)"
+    int_times_frac_pattern = (
+        r"(-?\s*\d+)\s*\(\s*(?:"
+        + solution_latex_escaped + r"|" + solution_latex_simplified_escaped
+        + r")\s*\)"
+    )
 
     # Repeatedly find and expand products of the form k*(p/q) until none remain
     for _ in range(20):
-
+        # print(f"int_times_frac_pattern: {int_times_frac_pattern}")
+        # print(f"current_expression: {current_expression}")
+       
         # Search for the next occurrence of the pattern
         pattern_match = re.search(int_times_frac_pattern, current_expression)
 
         # No more matches -- all integer-times-fraction products have been handled
         if not pattern_match:
             break
+        
+        # print(f"term_coefficient: {pattern_match.group(1)}")
 
         # Extract the integer coefficient from the match
         # Example: '2(\frac{1}{2})'  >>  term_coefficient = 2
@@ -375,6 +393,16 @@ def sympy_stepwise(substituted_expression, sym_evaled, final_value):
 
         # Everything after the matched pattern
         after_match = current_expression[pattern_match.end():]
+
+        if display_value is not None and display_value != solution_latex:
+            expr_simplified = current_expression.replace(
+                f"({display_value})", f"({solution_latex})", 1
+            )
+
+            if expr_simplified != current_expression:
+                result.append((expr_simplified, None))
+                current_expression = expr_simplified
+                continue
 
         # Build the LaTeX showing the multiplication explicitly before evaluating it
         # Example: '\frac{2 \cdot 1}{2}'
@@ -449,8 +477,12 @@ def sympy_stepwise(substituted_expression, sym_evaled, final_value):
 
     # Build the regex pattern that matches a LaTeX fraction coefficient followed by the solution in parentheses
     fraction_times_fraction_pattern = (
-        r"\\frac\{(\d+)\}\{(\d+)\}\s*\(\s*" + solution_latex_escaped + r"\s*\)"
+        r"\\frac\{(\d+)\}\{(\d+)\}\s*\(\s*(?:"
+        + solution_latex_escaped + r"|" + solution_latex_simplified_escaped
+        + r")\s*\)"
     )
+
+    # print(current_expression)
 
     # Repeatedly find and expand products of the form (a/b)*(p/q) until none remain
     for _ in range(20):
@@ -483,6 +515,15 @@ def sympy_stepwise(substituted_expression, sym_evaled, final_value):
 
         # Everything after the matched pattern
         after_match = current_expression[pattern_match.end():]
+
+        if display_value is not None and display_value != solution_latex:
+            expr_simplified = current_expression.replace(
+                f"({display_value})", f"({solution_latex})", 1
+            )
+            if expr_simplified != current_expression:
+                result.append((expr_simplified, None))
+                current_expression = expr_simplified
+                continue
 
         # Build the LaTeX showing both multiplications explicitly before evaluating
         # Example: '\frac{3 \cdot 1}{5 \cdot 2}'
@@ -603,59 +644,66 @@ def sympy_stepwise(substituted_expression, sym_evaled, final_value):
         if not has_reducible_fraction:
             break
 
-    # ---------------------------------------------------------------
-    # Step 2: convert isolated integers to the common denominator so
-    # they can be added to the fractions in Step 3
-    # Example: '3 + \frac{1}{2}'  >>  '\frac{6}{2} + \frac{1}{2}'
-    # ---------------------------------------------------------------
+    # Only proceed to Step 2 if no fraction-times-fraction patterns remain
+    if not re.search(fraction_times_fraction_pattern, current_expression) and not re.search(int_times_frac_pattern, current_expression):
+    
+        found_denominators = extract_denominators(current_expression)
 
-    # Find all denominators currently present in the expression
-    # Example: '3 + \frac{1}{2} + \frac{1}{4}'  >>  found_denominators = [2, 4]
-    found_denominators = extract_denominators(current_expression)
+        if found_denominators and _find_isolated_ints(current_expression):
+           
+            # ---------------------------------------------------------------
+            # Step 2: convert isolated integers to the common denominator so
+            # they can be added to the fractions in Step 3
+            # Example: '3 + \frac{1}{2}'  >>  '\frac{6}{2} + \frac{1}{2}'
+            # ---------------------------------------------------------------
 
-    # Only proceed if there are both fractions and isolated integers to convert
-    if found_denominators and _find_isolated_ints(current_expression):
+            # Find all denominators currently present in the expression
+            # Example: '3 + \frac{1}{2} + \frac{1}{4}'  >>  found_denominators = [2, 4]
+            found_denominators = extract_denominators(current_expression)
 
-        # Find the least common multiple of all denominators
-        # Example: lcm(2, 4)  >>  common_denominator = 4
-        common_denominator = _freduce(_mlcm, found_denominators)
+            # Only proceed if there are both fractions and isolated integers to convert
+            if found_denominators and _find_isolated_ints(current_expression):
 
-        # Emit an explanation step before converting -- tells the viewer what is about to happen
-        result.append((current_expression, f"Reduce to common denominator ({common_denominator})"))
+                # Find the least common multiple of all denominators
+                # Example: lcm(2, 4)  >>  common_denominator = 4
+                common_denominator = _freduce(_mlcm, found_denominators)
 
-        # Convert one isolated integer at a time until none remain
-        for _ in range(30):
+                # Emit an explanation step before converting -- tells the viewer what is about to happen
+                result.append((current_expression, f"Reduce to common denominator ({common_denominator})"))
 
-            # Find all remaining isolated integers in the current expression
-            found_integers = _find_isolated_ints(current_expression)
+                # Convert one isolated integer at a time until none remain
+                for _ in range(30):
 
-            # No more isolated integers to convert -- exit the loop
-            if not found_integers:
-                break
+                    # Find all remaining isolated integers in the current expression
+                    found_integers = _find_isolated_ints(current_expression)
 
-            # Take the first isolated integer found
-            # Example: '3 + \frac{1}{2}'  >>  start=0, end=1, integer_value=3
-            start, end, integer_value = found_integers[0]
+                    # No more isolated integers to convert -- exit the loop
+                    if not found_integers:
+                        break
 
-            # Rewrite the integer as a fraction over the common denominator
-            # Example: 3 with common_denominator=4  >>  '\frac{12}{4}'
-            converted_fraction = (
-                r"\frac{" + str(integer_value * common_denominator)
-                + r"}{" + str(common_denominator) + r"}"
-            )
+                    # Take the first isolated integer found
+                    # Example: '3 + \frac{1}{2}'  >>  start=0, end=1, integer_value=3
+                    start, end, integer_value = found_integers[0]
 
-            # Replace the integer with the converted fraction in the expression
-            new_expression = fix_sign_combinations(
-                current_expression[:start] + converted_fraction + current_expression[end:]
-            )
+                    # Rewrite the integer as a fraction over the common denominator
+                    # Example: 3 with common_denominator=4  >>  '\frac{12}{4}'
+                    converted_fraction = (
+                        r"\frac{" + str(integer_value * common_denominator)
+                        + r"}{" + str(common_denominator) + r"}"
+                    )
 
-            # If nothing changed, stop -- avoids infinite loops
-            if new_expression == current_expression:
-                break
+                    # Replace the integer with the converted fraction in the expression
+                    new_expression = fix_sign_combinations(
+                        current_expression[:start] + converted_fraction + current_expression[end:]
+                    )
 
-            # Record this step and update the current expression
-            result.append((new_expression, None))
-            current_expression = new_expression
+                    # If nothing changed, stop -- avoids infinite loops
+                    if new_expression == current_expression:
+                        break
+
+                    # Record this step and update the current expression
+                    result.append((new_expression, None))
+                    current_expression = new_expression
 
     # ---------------------------------------------------------------
     # Step 3: add or subtract fractions pairwise until only one remains
@@ -888,6 +936,17 @@ def check_solution(final_value, final_latex, equation, steps, x_value_str=None):
 
     equation_display = f"{left_display} = {right_display}"
 
+    solution_latex = sp.latex(final_value)
+
+    if x_value_str:
+        display_value = x_value_str
+    else:
+        display_value = solution_latex
+        
+    if x_value_str and '/' in x_value_str and '.' not in x_value_str:
+        parts = x_value_str.split('/')
+        display_value = f"\\frac{{{parts[0]}}}{{{parts[1]}}}"
+
     steps.append(
         Step(
             before = equation_display,
@@ -899,7 +958,7 @@ def check_solution(final_value, final_latex, equation, steps, x_value_str=None):
         Step(
             before = equation_display,
             after = equation_display,
-            explanation = f"Now replace x by {x_value_str}"
+            explanation = f"Now replace x by {display_value}"
         )
     )
 
@@ -911,11 +970,6 @@ def check_solution(final_value, final_latex, equation, steps, x_value_str=None):
             lambda _match: "(" + x_value + ")",
             expression,
         )
-
-    if x_value_str:
-        display_value = x_value_str
-    else:
-        display_value = solution_latex
 
     unsimplified = decimal_simplification_steps(display_value)
 
@@ -972,9 +1026,11 @@ def check_solution(final_value, final_latex, equation, steps, x_value_str=None):
 
     left_substituted = current_left
     right_substituted = current_right
+    
+    # print(right_substituted)
 
-    left_tuples  = sympy_stepwise(left_substituted,  left_unevaluated,  final_value)
-    right_tuples = sympy_stepwise(right_substituted, right_unevaluated, final_value)
+    left_tuples  = sympy_stepwise(left_substituted,  left_unevaluated,  final_value, display_value)
+    right_tuples = sympy_stepwise(right_substituted, right_unevaluated, final_value, display_value)
 
     def _extract(tuples):
         step_list, explanations = [], {}

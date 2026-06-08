@@ -106,6 +106,27 @@ def rational_coef_solve_steps(
             )
         )
 
+        # Step: show (coef_denominator * coef_numerator * x) / coef_denominator
+        left_step1 = f"\\frac{{{coef_denominator} \\cdot ({coef_numerator} x)}}{{{coef_denominator}}} = {right_side_product_unevaluated}"
+
+        result_steps.append(
+            Step(
+                before = eq_after_multiply_unevaluated, 
+                after = left_step1
+            )
+        )
+
+        # Step: evaluate numerator
+        numerator_left = coef_denominator * coef_numerator
+        left_step2 = f"\\frac{{{numerator_left} x}}{{{coef_denominator}}} = {right_side_product_unevaluated}"
+
+        result_steps.append(
+            Step(
+                before = left_step1, 
+                after = left_step2
+            )
+        )
+
         # Evaluate the product costante_numerator * coef_denominator
         # Example: 25 * 5  >>  numerator_product = 125
         numerator_product = costante_numerator * coef_denominator
@@ -156,8 +177,11 @@ def rational_coef_solve_steps(
     #          costante_denominator = 2  >> '\frac{125}{2 * -1}' >> '\frac{125}{-2}'
     if costante_denominator == 1:
         right_side_divided = f"\\frac{{{numerator_product}}}{{{coef_numerator}}}"
+        right_side_evaluated = right_side_divided
     else:
-        right_side_divided = f"\\frac{{{numerator_product}}}{{{costante_denominator * coef_numerator}}}"
+        right_side_divided = f"{final_right_latex} : {coef_numerator}"
+        right_side_unevaluated = f"\\frac{{{costante_numerator}}}{{{costante_denominator}}} \\cdot \\frac{{{1}}}{{{coef_numerator}}}"
+        right_side_evaluated = f"\\frac{{{numerator_product}}}{{{costante_denominator * coef_numerator}}}"
 
     # Build the full equation string showing the unevaluated division
     # Example: 'x = \frac{125}{-2}'
@@ -202,13 +226,43 @@ def rational_coef_solve_steps(
             )
         )
 
-        if eq_solution_simplified != eq_after_divide_unevaluated:
+        if costante_denominator != 1:
             result_steps.append(
                 Step(
                     before=eq_after_divide_unevaluated,
-                    after=eq_solution_simplified
+                    after=f"x = {right_side_divided}"
                 )
             )
+
+            result_steps.append(
+                Step(
+                    before=f"x = {right_side_divided}",
+                    after=f"x = {right_side_unevaluated}"
+                )
+            )
+
+            result_steps.append(
+                Step(
+                    before=f"x = {right_side_unevaluated}",
+                    after=f"x = {right_side_evaluated}"
+                )
+            )
+
+            if eq_solution_simplified != f"x = {right_side_evaluated}":
+                result_steps.append(
+                    Step(
+                        before=f"x = {right_side_evaluated}",
+                        after=eq_solution_simplified
+                    )
+                )
+        else:
+            if eq_solution_simplified != eq_after_divide_unevaluated:
+                result_steps.append(
+                    Step(
+                        before=eq_after_divide_unevaluated,
+                        after=eq_solution_simplified
+                    )
+                )
 
     # print(f"numerator product: {numerator_product}")
     return result_steps, solution
