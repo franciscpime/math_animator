@@ -68,32 +68,22 @@ def solve_linear(equation: str):
 
     # Process each detected decimal one at a time
     for dec_str, _dec_val in raw_decimals:
-
-        # Get the list of LaTeX strings walking through the conversion
-        # Example: '0.5'  >>  ['0.5', '\frac{5}{10}', '\frac{1}{2}']
-        dec_steps = decimal_simplification_steps(dec_str)
-
-        # Walk through each transition in the conversion sequence
+        dec_str_search = dec_str.lstrip('-')  # remove leading minus for search
+        dec_steps = decimal_simplification_steps(dec_str_search)
+        
         for i in range(1, len(dec_steps)):
-
-            # The equation before this transition
             before_eq = current_eq_display
-
-            # Replace only the first occurrence so we handle one decimal at a time
             after_eq = before_eq.replace(dec_steps[i - 1], dec_steps[i], 1)
 
-            # Only emit a step if something actually changed
             if before_eq != after_eq:
-
                 steps.append(
                     Step(
-                        before = before_eq,
+                        before = before_eq, 
                         after = after_eq
                     )
                 )
-
                 # Update the running display string for the next iteration
-                current_eq_display = after_eq
+                current_eq_display = after_eq                    
 
     # ------------------------------------------------------------------
     # Pre-solve step 2: simplify unreduced fractions (e.g. 6/4 >> 3/2).
@@ -181,6 +171,29 @@ def solve_linear(equation: str):
             )
         )
 
+    current_eq_display = new_eq
+
+    import re as _re
+    decimal_pattern = _re.compile(r'-?\d+\.\d+')
+
+    for dec_match in decimal_pattern.finditer(new_eq):
+        dec_str_found = dec_match.group(0)
+        dec_steps_found = decimal_simplification_steps(dec_str_found)
+
+        for i in range(1, len(dec_steps_found)):
+            before_eq = current_eq_display
+            after_eq = before_eq.replace(dec_steps_found[i-1], dec_steps_found[i], 1)
+
+            if before_eq != after_eq:
+                steps.append(
+                    Step(
+                        before = before_eq, 
+                        after = after_eq
+                    )
+                )
+
+                current_eq_display = after_eq
+
     # ------------------------------------------------------------------
     # Simplify variable terms step by step.
     # Example: 2x + (4/5)x - 3x  >>  -x/5
@@ -259,6 +272,21 @@ def solve_linear(equation: str):
     # Walk through every intermediate state emitted by the stepwise combiner
     current_display_eq = build_equation(current_vars, current_consts)
 
+    const_denoms = [sp.Rational(t).q for t in constant_terms if not t.has(x)]
+    if len(set(const_denoms)) > 1:
+        from functools import reduce
+        from math import lcm
+        lcd = reduce(lcm, const_denoms)
+        steps.append(
+            Step(
+                before = build_equation(current_vars, current_consts),
+                after = build_equation(current_vars, current_consts),
+                explanation = f"Reduce to common denominator ({lcd})"
+            )
+        )
+
+    # print(current_eq_display)
+
     for entry in combine_terms_stepwise(constant_terms):
         if isinstance(entry, tuple) and entry[0] == "__latex__":
             _, const_latex, _state = entry
@@ -274,7 +302,6 @@ def solve_linear(equation: str):
                 )
 
             current_display_eq = after_eq
-
 
         # Plain list entry -- the constant terms have been fully updated
         else:
@@ -335,13 +362,13 @@ def solve_linear(equation: str):
         decimal_approximation = decimal_str(final_value)
 
         # Show the decimal approximation step only when the solution is not a whole number
-        if decimal_approximation:
-            steps.append(
-                Step(
-                    before = f"x = {final_latex}",
-                    after = f"x = {final_latex} \\approx {decimal_approximation}",
-                )
-            )
+        # if decimal_approximation:
+        #     steps.append(
+        #         Step(
+        #             before = f"x = {final_latex}",
+        #             after = f"x = {final_latex} \\approx {decimal_approximation}",
+        #         )
+        #     )
 
 
     # ------------------------------------------------------------------
@@ -398,13 +425,13 @@ def solve_linear(equation: str):
         decimal_approximation = decimal_str(final_value)
 
         # Show the decimal approximation step only when the solution is not a whole number
-        if decimal_approximation:
-            steps.append(
-                Step(
-                    before = f"x = {final_latex}",
-                    after = f"x = {final_latex} \\approx {decimal_approximation}",
-                )
-            )
+        # if decimal_approximation:
+        #     steps.append(
+        #         Step(
+        #             before = f"x = {final_latex}",
+        #             after = f"x = {final_latex} \\approx {decimal_approximation}",
+        #         )
+        #     )
 
 
     # Return the complete list of animation steps to the caller
