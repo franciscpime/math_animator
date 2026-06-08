@@ -203,7 +203,7 @@ def sympy_stepwise(substituted_expression, sym_evaled, final_value, display_valu
         # Build the regex pattern that matches expressions like '2(3)' or '-4(3)'
         # i.e. an integer coefficient immediately followed by the solution in parentheses
         # Example: pattern matches '2(3)' in '2(3) + 5'
-        pattern = r"(-?\s*\d+)\s*\(\s*" + solution_latex_escaped + r"\s*\)"
+        pattern = r"(-?\s*\d+(?:\.\d+)?)\s*\(\s*" + solution_latex_escaped + r"\s*\)"
 
         # Repeatedly find and evaluate products of the form k*(integer) until none remain
         # The loop limit of 20 prevents infinite loops in unexpected edge cases
@@ -218,7 +218,7 @@ def sympy_stepwise(substituted_expression, sym_evaled, final_value, display_valu
 
             # Extract the integer coefficient from the match
             # Example: '2(3)'  >>  term_coefficient = 2
-            term_coefficient = int(pattern_match.group(1).replace(" ", ""))
+            term_coefficient = float(pattern_match.group(1).replace(" ", ""))
 
             # Multiply the coefficient by the solution to get the evaluated product
             # Example: 2 * 3  >>  product = 6
@@ -234,22 +234,20 @@ def sympy_stepwise(substituted_expression, sym_evaled, final_value, display_valu
 
             # Start with the product as a plain string
             # Example: product = 6  >>  product_string = '6'
-            product_string = str(product)
+
+            product_string = str(int(product)) if product == int(product) else str(product)
 
             # If the product is not at the start of the expression and not right after
             # an operator, we need to add an explicit + or - sign before it
             # Example: '5 + 6'  >>  the 6 needs a '+' prefix so it reads correctly
+            abs_product = abs(product)
+            abs_str = str(int(abs_product)) if abs_product == int(abs_product) else str(abs_product)
+
             if before_match.rstrip() and before_match.rstrip()[-1] not in "+-=(,":
-
-                # Positive product -- add an explicit '+' sign
-                # Example: product = 6  >>  product_string = '+ 6'
                 if product >= 0:
-                    product_string = "+ " + str(abs(product))
-
-                # Negative product -- add an explicit '-' sign
-                # Example: product = -6  >>  product_string = '- 6'
+                    product_string = "+ " + abs_str
                 else:
-                    product_string = "- " + str(abs(product))
+                    product_string = "- " + abs_str
 
             # Reconstruct the expression with the product replacing the matched pattern,
             # then clean up any double negatives or plus-minus combinations
@@ -263,6 +261,105 @@ def sympy_stepwise(substituted_expression, sym_evaled, final_value, display_valu
             # Record this step and update the current expression
             result.append((updated_expression, None))
             current_expression = updated_expression
+
+    # Step 1d: handle patterns like '\frac{a}{b} * (n)' -- fraction times an integer
+    frac_times_int_pattern = r"\\frac\{(\d+)\}\{(\d+)\}\s*\(\s*(-?\d+)\s*\)"
+
+    for _ in range(20):
+        pattern_match = re.search(frac_times_int_pattern, current_expression)
+        if not pattern_match:
+            break
+        
+        frac_num = int(pattern_match.group(1))
+        frac_den = int(pattern_match.group(2))
+        integer_val = int(pattern_match.group(3))
+        
+        before_match = current_expression[:pattern_match.start()]
+        after_match = current_expression[pattern_match.end():]
+        
+        product_shown = r"\frac{" + str(frac_num) + r" \cdot " + str(integer_val) + r"}{" + str(frac_den) + r"}"
+        expr_shown = fix_sign_combinations(before_match + product_shown + after_match)
+        if expr_shown != current_expression:
+            result.append((expr_shown, None))
+            current_expression = expr_shown
+        
+        product_evaluated = sp.latex(sp.Rational(frac_num * integer_val, frac_den))
+        expr_evaluated = fix_sign_combinations(current_expression.replace(product_shown, product_evaluated, 1))
+        if expr_evaluated != current_expression:
+            result.append((expr_evaluated, None))
+            current_expression = expr_evaluated
+    
+    # Step 2: convert isolated integers to common denominator (integer path)
+    found_denominators = extract_denominators(current_expression)
+
+    if found_denominators and _find_isolated_ints(current_expression):
+        common_denominator = _freduce(_mlcm, found_denominators)
+        result.append((current_expression, f"Reduce to common denominator ({common_denominator})"))
+
+        for _ in range(30):
+            found_integers = _find_isolated_ints(current_expression)
+            if not found_integers:
+                break
+            start, end, integer_value = found_integers[0]
+            converted_fraction = (
+                r"\frac{" + str(integer_value * common_denominator)
+                + r"}{" + str(common_denominator) + r"}"
+            )
+            new_expression = fix_sign_combinations(
+                current_expression[:start] + converted_fraction + current_expression[end:]
+            )
+            if new_expression == current_expression:
+                break
+            result.append((new_expression, None))
+            current_expression = new_expression
+
+    # Step 3: add/subtract fractions pairwise (integer path)
+    fraction_pair_pattern = r"(\\frac\{(-?\d+)\}\{(\d+)\})\s*([+-])\s*(\\frac\{(-?\d+)\}\{(\d+)\})"
+
+    for _ in range(30):
+        pattern_match = re.search(fraction_pair_pattern, current_expression)
+        if not pattern_match:
+            break
+
+        first_numerator   = int(pattern_match.group(2))
+        first_denominator = int(pattern_match.group(3))
+        operator          = pattern_match.group(4)
+        second_numerator  = int(pattern_match.group(6))
+        second_denominator = int(pattern_match.group(7))
+
+        if first_denominator != second_denominator:
+            break
+
+        if operator == "+":
+            second_numerator_with_sign = second_numerator
+            unevaluated = f"{first_numerator} + {second_numerator}"
+        else:
+            second_numerator_with_sign = -second_numerator
+            unevaluated = f"{first_numerator} - {second_numerator}"
+
+        grouped = r"\frac{" + unevaluated + r"}{" + str(first_denominator) + r"}"
+        expr_joined = fix_sign_combinations(
+            current_expression[:pattern_match.start()] + grouped + current_expression[pattern_match.end():]
+        )
+        if expr_joined != current_expression:
+            result.append((expr_joined, None))
+            current_expression = expr_joined
+
+        numerator_sum = first_numerator + second_numerator_with_sign
+        frac_evaluated = r"\frac{" + str(numerator_sum) + r"}{" + str(first_denominator) + r"}"
+        reduced = sp.latex(sp.Rational(numerator_sum, first_denominator))
+
+        if frac_evaluated != grouped:
+            new_expr = fix_sign_combinations(current_expression.replace(grouped, frac_evaluated, 1))
+            if new_expr != current_expression:
+                result.append((new_expr, None))
+                current_expression = new_expr
+
+        if reduced != frac_evaluated:
+            new_expr = fix_sign_combinations(current_expression.replace(frac_evaluated, reduced, 1))
+            if new_expr != current_expression:
+                result.append((new_expr, None))
+                current_expression = new_expr
 
         # Ask SymPy for the fully simplified final result to use as a target
         # Example: sym_evaled = 3 + 2  >>  final_expression = '5'
@@ -984,6 +1081,47 @@ def check_solution(final_value, final_latex, equation, steps, x_value_str=None):
     )
 
     current_left, current_right = left_substituted, right_substituted
+
+    # Convert decimals in substituted expressions step by step
+    import re as _re
+    for dec_match in _re.finditer(r'-?\d+\.\d+', left_substituted):
+        dec_str = dec_match.group(0)
+        dec_steps = decimal_simplification_steps(dec_str)
+
+        for i in range(1, len(dec_steps)):
+            before_left = current_left
+            after_left = before_left.replace(dec_steps[i-1], dec_steps[i], 1)
+
+            if before_left != after_left:
+                steps.append(
+                    Step(
+                        before = f"{current_left} = {current_right}",
+                        after = f"{after_left} = {current_right}"
+                    )
+                )
+
+                current_left = after_left
+
+    for dec_match in _re.finditer(r'-?\d+\.\d+', right_substituted):
+        dec_str = dec_match.group(0)
+        dec_steps = decimal_simplification_steps(dec_str)
+
+        for i in range(1, len(dec_steps)):
+            before_right = current_right
+            after_right = before_right.replace(dec_steps[i-1], dec_steps[i], 1)
+
+            if before_right != after_right:
+                steps.append(
+                    Step(
+                        before = f"{current_left} = {current_right}",
+                        after = f"{current_left} = {after_right}"
+                    )
+                )
+
+                current_right = after_right
+
+    left_substituted = current_left
+    right_substituted = current_right
 
     if x_value_str and '.' in x_value_str:
         unsimplified = decimal_simplification_steps(x_value_str)
