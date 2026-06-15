@@ -11,6 +11,8 @@ Example: "two x plus three equals seven"  >>  "2x + 3 = 7"
          "half x minus four is ten"        >>  "1/2x - 4 = 10"
 '''
 def parse_natural_language(user_input: str) -> str:
+
+    # Call the Groq API using the Llama 3.3 70B template
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[
@@ -27,6 +29,7 @@ def parse_natural_language(user_input: str) -> str:
                     "'half x minus four is ten' -> '1/2x - 4 = 10'"
                 )
             },
+            # Send the user input as a message
             {
                 "role": "user",
                 "content": user_input
@@ -35,5 +38,6 @@ def parse_natural_language(user_input: str) -> str:
         max_tokens=50,
         temperature=0
     )
+    # Extract the text from the response and remove whitespace
     return response.choices[0].message.content.strip()
 

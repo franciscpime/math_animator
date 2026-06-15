@@ -9,50 +9,45 @@ class EquationRenderer:
         self.scene = scene
         self.tex = None                 # save the current visual object on the screen
 
+
     def _format_explanation(self, text: str) -> str:
-        """Envolve comandos LaTeX em $...$ para compilação correcta pelo Tex()."""
+        
         return re.sub(
             r'(\\[a-zA-Z]+(?:\{[^}]*\})*(?:\{[^}]*\})?)',
             r'$\1$',
             text
         )
 
+
     def _make_tex(self, latex_str: str) -> MathTex:
         # Remove double or multiple spaces from a LaTeX string
         latex_str = re.sub(r'  +', ' ', latex_str)
         tex = MathTex(latex_str)
-        max_width  = config.frame_width  * 0.9
+        max_width = config.frame_width  * 0.9
         max_height = config.frame_height * 0.25
         scale = min(
             max_width  / tex.width  if tex.width  > 0 else 1,
             max_height / tex.height if tex.height > 0 else 1,
             1.4
         )
+
         return tex.scale(scale)
 
-    def _make_explanation(self, text: str) -> Mobject:
-        """
-        Cria o mobject de explicação adequado consoante o conteúdo.
 
-        Regras:
-          - Só LaTeX puro (ex: 'x = \\frac{24}{5} \\approx 4.8') >> MathTex
-          - Texto misto com LaTeX embutido (ex: 'Substituir x por \\frac{24}{5}')
-            >> Tex com _format_explanation (envolve LaTeX em $...$)
-          - Texto simples >> Tex
-        """
-        # Detectar se é LaTeX puro: começa com \, x = ..., ou só tem LaTeX
+    def _make_explanation(self, text: str) -> Mobject:
+
         pure_latex = bool(re.match(r'^[x\s\\$=\d\{\}\^_\+\-\*/\.]+$', text.strip()))
 
         if pure_latex and re.search(r'\\approx|\\frac', text):
-            # LaTeX puro — usar MathTex
             return self._make_tex(text).scale(0.7)
+        
         elif re.search(r'\\[a-zA-Z]', text):
-            # Texto misto com comandos LaTeX - usar Tex com $...$
             formatted = self._format_explanation(text)
             return Tex(formatted).scale(0.9)
+        
         else:
-            # Texto simples
             return Tex(text).scale(0.9)
+
 
     def animate(self, steps):
         first = to_latex(steps[0].before)

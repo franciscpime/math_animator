@@ -3,10 +3,6 @@ from functools import reduce
 import sympy as sp
 
 def compute_mmc(expressions):
-    """
-    Calcula o mínimo múltiplo comum de vários denominadores.
-    """
-
     if not expressions:
         return None
 
@@ -31,3 +27,5 @@ def apply_mmc(expr):
     result = sum(new_terms)
 
     return mmc, result
+
+
