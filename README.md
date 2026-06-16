@@ -1,6 +1,6 @@
 # Math Animator
 
-A Python tool that takes a linear equation and generates an animated video showing every single step of the solution — with plain-language explanations alongside the math.
+A Python tool that takes a linear equation and generates an animated video showing every single step of the solution, with plain-language explanations alongside the math.
 
 ## Features
 
